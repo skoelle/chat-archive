@@ -43,6 +43,6 @@ jobs:
           tagName: importer-v__VERSION__
           releaseName: 'Takeout Message Importer v__VERSION__'
           releaseBody: 'Windows build of the Takeout Message Importer.'
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           uploadWorkflowArtifacts: true
