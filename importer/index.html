@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>takeout-message-importer</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Takeout Message Importer</h1>
+
+      <section class="links">
+        <a href="https://accountscenter.instagram.com/info_and_permissions/dyi/" target="_blank">Request Instagram export</a>
+        <a href="https://accountscenter.facebook.com/info_and_permissions/dyi" target="_blank">Request Facebook export</a>
+        <p class="hint">E2EE chats: Messenger.com &rarr; Privacy &amp; Safety &rarr; End-to-end encrypted chats &rarr; Message Storage</p>
+      </section>
+
+      <section class="dropzones">
+        <div id="drop-instagram" class="dropzone" data-platform="instagram">
+          <p>Instagram takeout (.zip)<br /><small>drop here or click</small></p>
+          <input type="file" id="file-instagram" accept=".zip" hidden />
+        </div>
+        <div id="drop-facebook" class="dropzone" data-platform="facebook">
+          <p>Facebook takeout (.zip)<br /><small>drop here or click</small></p>
+          <input type="file" id="file-facebook" accept=".zip" hidden />
+        </div>
+      </section>
+
+      <section class="api-form">
+        <h2>API connection (chat-archive-api)</h2>
+        <div class="form-grid">
+          <label>API base URL <input id="api-url" value="http://127.0.0.1:8420" /></label>
+          <label>API token <input id="api-token" type="password" /></label>
+        </div>
+        <button id="btn-test">Test connection</button>
+        <button id="btn-import" disabled>Start import</button>
+      </section>
+
+      <section class="log">
+        <h2>Log</h2>
+        <progress id="progress" value="0" max="100"></progress>
+        <pre id="log-output"></pre>
+      </section>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
