@@ -40,4 +40,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: importer
+          tagName: importer-v__VERSION__
+          releaseName: 'Takeout Message Importer v__VERSION__'
+          releaseBody: 'Windows build of the Takeout Message Importer.'
+          releaseDraft: true
+          prerelease: false
           uploadWorkflowArtifacts: true
