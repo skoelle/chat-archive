@@ -45,4 +45,5 @@ jobs:
           releaseBody: 'Windows build of the Takeout Message Importer.'
           releaseDraft: false
           prerelease: false
-          uploadWorkflowArtifacts: true
+          uploadPlainBinary: true
+          args: '--no-bundle'
