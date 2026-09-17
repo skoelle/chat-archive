@@ -34,3 +34,7 @@ the reverse proxy instead of Authelia.
 2. Build `importer/` (see `importer/README.md`), use the same token there.
 3. Clone the reference parsers from `docs/REFERENCE-PARSERS.md`, port the
    logic into `api/app/parsers/` (currently placeholders with TODOs).
+
+## License
+
+Licensed under the [MIT License](LICENSE) - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+// Licensed under the MIT License. See LICENSE file in project root for details.
+
 import { invoke } from "@tauri-apps/api/core";
 
 const selected = { instagram: null, facebook: null };

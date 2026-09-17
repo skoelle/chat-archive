@@ -120,3 +120,9 @@ npm run tauri build
   JSON format for both takeout exports.
 - Reference parsers are in `docs/REFERENCE-PARSERS.md` (not dependencies, just
   cloning instructions for porting logic).
+
+## License
+
+MIT License - Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
+- Full text in `LICENSE`
+- License headers in all source code files
