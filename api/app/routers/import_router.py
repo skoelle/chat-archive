@@ -10,6 +10,7 @@ from app.models import Message
 from app.schemas import RawThreadPayload, ImportResult
 from app.parsers.instagram import parse_instagram_thread
 from app.parsers.facebook import parse_facebook_thread
+from app.parsers.facebook_e2ee import parse_facebook_e2ee_thread
 
 router = APIRouter(prefix="/import", dependencies=[Depends(verify_api_key)])
 
@@ -23,6 +24,12 @@ def import_instagram(payload: RawThreadPayload, db: Session = Depends(get_db)):
 @router.post("/facebook", response_model=ImportResult)
 def import_facebook(payload: RawThreadPayload, db: Session = Depends(get_db)):
     parsed = parse_facebook_thread(payload.thread_id, payload.raw_json)
+    return _persist(db, "facebook", payload.thread_id, parsed)
+
+
+@router.post("/facebook-e2ee", response_model=ImportResult)
+def import_facebook_e2ee(payload: RawThreadPayload, db: Session = Depends(get_db)):
+    parsed = parse_facebook_e2ee_thread(payload.thread_id, payload.raw_json)
     return _persist(db, "facebook", payload.thread_id, parsed)
 
 

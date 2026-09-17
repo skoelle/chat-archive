@@ -3,7 +3,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
-const selected = { instagram: null, facebook: null };
+const selected = { instagram: null, facebook: null, "facebook-e2ee": null };
 const logEl = document.getElementById("log-output");
 const progressEl = document.getElementById("progress");
 const importBtn = document.getElementById("btn-import");
@@ -32,7 +32,7 @@ function handleFiles(fileList, platform) {
   if (!file) return;
   selected[platform] = file.path || file.name;
   log(`[${platform}] selected: ${selected[platform]}`);
-  importBtn.disabled = !(selected.instagram || selected.facebook);
+  importBtn.disabled = !(selected.instagram || selected.facebook || selected["facebook-e2ee"]);
 }
 
 function apiConfig() {
@@ -56,7 +56,7 @@ document.getElementById("btn-import").addEventListener("click", async () => {
   progressEl.value = 0;
   const config = apiConfig();
 
-  for (const platform of ["instagram", "facebook"]) {
+  for (const platform of ["instagram", "facebook", "facebook-e2ee"]) {
     const path = selected[platform];
     if (!path) continue;
 
@@ -77,3 +77,4 @@ document.getElementById("btn-import").addEventListener("click", async () => {
 
 setupDropzone("drop-instagram", "instagram");
 setupDropzone("drop-facebook", "facebook");
+setupDropzone("drop-facebook-e2ee", "facebook-e2ee");

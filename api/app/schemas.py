@@ -1,8 +1,9 @@
 # Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 # Licensed under the MIT License. See LICENSE file in project root for details.
 
+from typing import Any, Optional
+
 from pydantic import BaseModel
-from typing import Optional, List, Any
 
 
 class RawThreadPayload(BaseModel):
@@ -23,6 +24,13 @@ class MessageOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ConversationResult(BaseModel):
+    total: int
+    offset: int
+    limit: int
+    messages: list[MessageOut]
 
 
 class ImportResult(BaseModel):
