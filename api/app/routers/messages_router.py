@@ -93,6 +93,9 @@ def get_conversation(
     db: Session = Depends(get_db),
 ):
     from sqlalchemy import or_
+    from app.models import ContactMapping
+
+    # 1. Find thread_ids by sender_name (with umlaut normalization)
     name_conditions = []
     for name in contact_names:
         norm = _normalize(name)
@@ -103,19 +106,40 @@ def get_conversation(
             ))
         else:
             name_conditions.append(Message.sender_name.like(f"%{name}%"))
-    thread_query = (
-        db.query(Message.thread_id)
-        .filter(or_(*name_conditions))
-    )
-    thread_query = _apply_thread_type(thread_query, thread_type)
-    thread_ids = [r[0] for r in thread_query.distinct().all()]
+    thread_ids_by_name = {
+        r[0] for r in
+        db.query(Message.thread_id).filter(or_(*name_conditions)).distinct().all()
+    }
+
+    # 2. Find thread_ids from contact_mappings
+    mapping_conditions = []
+    for name in contact_names:
+        norm = _normalize(name)
+        if norm != name:
+            mapping_conditions.append(or_(
+                ContactMapping.display_name.like(f"%{name}%"),
+                ContactMapping.display_name.like(f"%{norm}%"),
+            ))
+        else:
+            mapping_conditions.append(ContactMapping.display_name.like(f"%{name}%"))
+    thread_ids_by_mapping = {
+        r[0] for r in
+        db.query(ContactMapping.thread_id).filter(or_(*mapping_conditions)).distinct().all()
+    }
+
+    # 3. Combine both
+    thread_ids = thread_ids_by_name | thread_ids_by_mapping
 
     if not thread_ids:
         return ConversationResult(total=0, offset=offset, limit=limit, messages=[])
 
+    # 4. Get messages, apply platform filter
     query = db.query(Message).filter(Message.thread_id.in_(thread_ids))
     if platform:
         query = query.filter(Message.platform == platform)
+
+    # 5. Apply thread_type filter
+    query = _apply_thread_type(query, thread_type)
 
     total = query.count()
     order_col = Message.timestamp_ms.desc() if order == "desc" else Message.timestamp_ms.asc()

@@ -48,7 +48,7 @@ chat-archive/
 
 ## Data model
 
-Single table `messages`:
+### `messages`
 - `id` (BigInteger, PK, auto-increment)
 - `platform` (String: `instagram` | `facebook`)
 - `thread_id` (String, indexed)
@@ -58,6 +58,13 @@ Single table `messages`:
 - `message_type` (String: `text` | `photo` | `video` | `audio` | `share`)
 - `reactions` (JSON, nullable: `[{"actor": "Name", "reaction": "❤"}]`)
 - `participant_count` (Integer, nullable: number of participants in thread)
+
+### `contact_mappings`
+Maps display names to thread_ids for cross-platform contact resolution.
+- `id` (Integer, PK, auto-increment)
+- `display_name` (String, indexed): real name, e.g. "Mareike Wüste"
+- `thread_id` (String, indexed): thread_id in messages table
+- `platform` (String, nullable): `instagram` | `facebook` | null (any)
 
 ## API endpoints
 
@@ -69,6 +76,9 @@ Single table `messages`:
 | GET | `/messages` | X-API-Key | Query messages (default: 1:1 chats) |
 | GET | `/threads` | X-API-Key | List distinct threads (default: 1:1 chats) |
 | GET | `/conversation` | X-API-Key | Merged conversation across platforms |
+| GET | `/contacts/` | X-API-Key | List all contact mappings |
+| POST | `/contacts/` | X-API-Key | Create contact mapping |
+| DELETE | `/contacts/{id}` | X-API-Key | Delete contact mapping |
 | GET | `/health` | none | Health check |
 
 `/messages`, `/threads` and `/conversation` accept `?thread_type=direct|group|all`
@@ -135,6 +145,11 @@ npm run tauri build
   (settings, metadata) are skipped by checking for a `messages` key.
 - `participant_count` is stored per message and used to filter threads:
   `?thread_type=direct` (2 participants), `?thread_type=group` (>2), `?thread_type=all`.
+- `/conversation` searches by `sender_name` AND by `contact_mappings` table.
+  This allows mapping display names (e.g. "Mareike Wüste") to thread_ids
+  (e.g. "mareikija_525260105537291") where the sender_name differs.
+- Name search uses LIKE with umlaut normalization: ü matches ue, ö matches oe,
+  ä matches ae, ß matches ss (and vice versa).
 - `import_test.py` is a standalone script for testing the full parse+DB pipeline
   directly against MariaDB, bypassing the API. It drops and recreates the table
   on each run. Uses `.env` for credentials (already gitignored).
