@@ -292,8 +292,13 @@ Manage display name → thread_id mappings for cross-platform contact resolution
 | Method | Path | Purpose |
 |---|---|---|
 | GET | /contacts/ | List all mappings |
-| POST | /contacts/ | Create a mapping |
-| DELETE | /contacts/{id} | Delete a mapping |
+| POST | /contacts/ | Add a new mapping |
+| DELETE | /contacts/{id} | Delete a single mapping by ID |
+
+#### POST /contacts/
+
+Adds a new mapping. Multiple mappings per display_name are allowed (e.g. same
+person on Instagram + Facebook).
 
 #### POST /contacts/
 
