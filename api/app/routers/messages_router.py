@@ -36,6 +36,7 @@ def list_messages(
     sender_name: Optional[str] = None,
     thread_type: ThreadType = Query(ThreadType.direct, description="all, direct (1:1), or group"),
     limit: int = Query(100, le=1000),
+    order: str = Query("asc", description="asc (oldest first) or desc (newest first)"),
     db: Session = Depends(get_db),
 ):
     query = db.query(Message)
@@ -46,7 +47,8 @@ def list_messages(
     if sender_name:
         query = query.filter(Message.sender_name == sender_name)
     query = _apply_thread_type(query, thread_type)
-    return query.order_by(Message.timestamp_ms.desc()).limit(limit).all()
+    order_col = Message.timestamp_ms.desc() if order == "desc" else Message.timestamp_ms.asc()
+    return query.order_by(order_col).limit(limit).all()
 
 
 @router.get("/threads")
