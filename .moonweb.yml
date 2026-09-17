@@ -1,0 +1,6 @@
+title: "Chat Archive"
+emoji: "💬"
+category: code
+subcategory: "Dev Tools"
+status: active
+stack: [Python, FastAPI, SQLAlchemy, Tauri, Rust]
