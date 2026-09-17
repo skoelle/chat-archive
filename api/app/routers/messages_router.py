@@ -14,6 +14,13 @@ from app.schemas import ConversationResult, MessageOut
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
+UMAP = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss",
+                        "Ä": "Ae", "Ö": "Oe", "Ü": "Ue"})
+
+
+def _normalize(text: str) -> str:
+    return text.translate(UMAP)
+
 
 class ThreadType(str, Enum):
     all = "all"
@@ -27,6 +34,15 @@ def _apply_thread_type(query, thread_type: ThreadType):
     elif thread_type == ThreadType.group:
         query = query.filter(Message.participant_count > 2)
     return query
+
+
+def _apply_name_search(query, column, name: str):
+    """Search by name with umlaut normalization (ü matches ue, etc.)."""
+    from sqlalchemy import or_
+    norm = _normalize(name)
+    if norm != name:
+        return query.filter(or_(column.like(f"%{name}%"), column.like(f"%{norm}%")))
+    return query.filter(column.like(f"%{name}%"))
 
 
 @router.get("/messages", response_model=List[MessageOut])
@@ -45,7 +61,7 @@ def list_messages(
     if thread_id:
         query = query.filter(Message.thread_id == thread_id)
     if sender_name:
-        query = query.filter(Message.sender_name == sender_name)
+        query = _apply_name_search(query, Message.sender_name, sender_name)
     query = _apply_thread_type(query, thread_type)
     order_col = Message.timestamp_ms.desc() if order == "desc" else Message.timestamp_ms.asc()
     return query.order_by(order_col).limit(limit).all()
@@ -76,9 +92,20 @@ def get_conversation(
     limit: int = Query(200, le=5000),
     db: Session = Depends(get_db),
 ):
+    from sqlalchemy import or_
+    name_conditions = []
+    for name in contact_names:
+        norm = _normalize(name)
+        if norm != name:
+            name_conditions.append(or_(
+                Message.sender_name.like(f"%{name}%"),
+                Message.sender_name.like(f"%{norm}%"),
+            ))
+        else:
+            name_conditions.append(Message.sender_name.like(f"%{name}%"))
     thread_query = (
         db.query(Message.thread_id)
-        .filter(Message.sender_name.in_(contact_names))
+        .filter(or_(*name_conditions))
     )
     thread_query = _apply_thread_type(thread_query, thread_type)
     thread_ids = [r[0] for r in thread_query.distinct().all()]
