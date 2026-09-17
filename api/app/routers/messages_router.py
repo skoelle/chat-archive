@@ -46,7 +46,7 @@ def list_messages(
     if sender_name:
         query = query.filter(Message.sender_name == sender_name)
     query = _apply_thread_type(query, thread_type)
-    return query.order_by(Message.timestamp_ms).limit(limit).all()
+    return query.order_by(Message.timestamp_ms.desc()).limit(limit).all()
 
 
 @router.get("/threads")
