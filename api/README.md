@@ -48,7 +48,7 @@ Maps display names to thread_ids for cross-platform contact resolution.
 | Column | Type | Description |
 |---|---|---|
 | `id` | Integer, PK | Auto-increment |
-| `display_name` | String, indexed | Real name, e.g. "Mareike Wüste" |
+| `display_name` | String, indexed | Real name, e.g. "Jane Doe" |
 | `thread_id` | String, indexed | Thread ID in messages table |
 | `platform` | String, nullable | `instagram` \| `facebook` \| null (any) |
 
@@ -299,7 +299,7 @@ Manage display name → thread_id mappings for cross-platform contact resolution
 
 ```bash
 curl -X POST -H "X-API-Key: $TOKEN" -H "Content-Type: application/json" \
-  -d '{"display_name": "Mareike Wüste", "thread_id": "mareikija_525260105537291", "platform": "instagram"}' \
+  -d '{"display_name": "Jane Doe", "thread_id": "mareikija_525260105537291", "platform": "instagram"}' \
   "http://localhost:8420/contacts/"
 ```
 
