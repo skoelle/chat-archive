@@ -28,6 +28,7 @@ from app.parsers.encoding_fix import fix_mojibake
 
 def parse_instagram_thread(thread_id: str, raw_json: dict) -> list[dict]:
     messages = []
+    participant_count = len(raw_json.get("participants", [])) or None
 
     for msg in raw_json.get("messages", []):
         message_type = "text"
@@ -47,6 +48,7 @@ def parse_instagram_thread(thread_id: str, raw_json: dict) -> list[dict]:
             "content": fix_mojibake(msg.get("content")),
             "message_type": message_type,
             "reactions": _extract_reactions(msg.get("reactions", [])),
+            "participant_count": participant_count,
         })
 
     return messages

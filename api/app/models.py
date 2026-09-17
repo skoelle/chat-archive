@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 # Licensed under the MIT License. See LICENSE file in project root for details.
 
-from sqlalchemy import BigInteger, Column, Index, String, Text
+from sqlalchemy import BigInteger, Column, Index, Integer, String, Text
 
 from app.db import Base
 from app.types import JSONList
@@ -18,6 +18,7 @@ class Message(Base):
     content = Column(Text, nullable=True)
     message_type = Column(String(20), nullable=False)      # text | photo | video | audio | share
     reactions = Column(JSONList, nullable=True)              # [{"actor": "...", "reaction": "..."}]
+    participant_count = Column(Integer, nullable=True)       # number of participants in thread
 
     __table_args__ = (
         Index("idx_thread", "thread_id"),

@@ -22,6 +22,7 @@ class MessageOut(BaseModel):
     content: str | None
     message_type: str
     reactions: list[dict] | None = None
+    participant_count: int | None = None
 
     class Config:
         from_attributes = True

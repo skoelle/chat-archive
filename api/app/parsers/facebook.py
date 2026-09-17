@@ -20,6 +20,7 @@ from app.parsers.encoding_fix import fix_mojibake
 
 def parse_facebook_thread(thread_id: str, raw_json: dict) -> list[dict]:
     messages = []
+    participant_count = len(raw_json.get("participants", [])) or None
 
     for msg in raw_json.get("messages", []):
         message_type = "text"
@@ -38,6 +39,7 @@ def parse_facebook_thread(thread_id: str, raw_json: dict) -> list[dict]:
             "timestamp_ms": msg.get("timestamp_ms", 0),
             "content": fix_mojibake(msg.get("content")),
             "message_type": message_type,
+            "participant_count": participant_count,
         })
 
     return messages

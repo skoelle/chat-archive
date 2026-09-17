@@ -19,6 +19,7 @@ def list_messages(
     platform: Optional[str] = None,
     thread_id: Optional[str] = None,
     sender_name: Optional[str] = None,
+    participant_count: Optional[int] = None,
     limit: int = Query(100, le=1000),
     db: Session = Depends(get_db),
 ):
@@ -29,17 +30,25 @@ def list_messages(
         query = query.filter(Message.thread_id == thread_id)
     if sender_name:
         query = query.filter(Message.sender_name == sender_name)
+    if participant_count is not None:
+        query = query.filter(Message.participant_count == participant_count)
     return query.order_by(Message.timestamp_ms).limit(limit).all()
 
 
 @router.get("/threads")
-def list_threads(db: Session = Depends(get_db)):
-    rows = (
-        db.query(Message.thread_id, Message.platform)
-        .distinct()
-        .all()
-    )
-    return [{"thread_id": r[0], "platform": r[1]} for r in rows]
+def list_threads(
+    participant_count: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(
+        Message.thread_id,
+        Message.platform,
+        Message.participant_count,
+    ).distinct()
+    if participant_count is not None:
+        query = query.filter(Message.participant_count == participant_count)
+    rows = query.all()
+    return [{"thread_id": r[0], "platform": r[1], "participant_count": r[2]} for r in rows]
 
 
 @router.get("/conversation", response_model=ConversationResult)

@@ -153,16 +153,21 @@ pub fn forward_directory(
         } else {
             // Facebook E2EE: each file is its own thread
             for file in files {
+                let raw = std::fs::read_to_string(file)
+                    .with_context(|| format!("Could not read {:?}", file))?;
+                let json: Value = serde_json::from_str(&raw)
+                    .with_context(|| format!("{:?} is not valid JSON", file))?;
+
+                // Skip non-thread files (settings, metadata, etc.)
+                if !json.is_object() || !json.get("messages").is_some() {
+                    continue;
+                }
+
                 let thread_id = file
                     .file_stem()
                     .and_then(|n| n.to_str())
                     .map(|n| n.to_string())
                     .unwrap_or_else(|| "unknown".to_string());
-
-                let raw = std::fs::read_to_string(file)
-                    .with_context(|| format!("Could not read {:?}", file))?;
-                let json: Value = serde_json::from_str(&raw)
-                    .with_context(|| format!("{:?} is not valid JSON", file))?;
 
                 let payload = RawThreadPayload {
                     thread_id: thread_id.clone(),
