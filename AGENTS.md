@@ -74,6 +74,8 @@ Single table `messages`:
 `/messages` and `/threads` accept `?thread_type=direct|group|all` (default:
 `direct` = 1:1 chats with exactly 2 participants).
 
+`/messages` also accepts `?order=asc|desc` (default: `asc` = oldest first).
+
 ## Environment variables (api/.env)
 
 ```
