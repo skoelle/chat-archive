@@ -1,6 +1,7 @@
 # Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 # Licensed under the MIT License. See LICENSE file in project root for details.
 
+from enum import Enum
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -14,12 +15,26 @@ from app.schemas import ConversationResult, MessageOut
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
+class ThreadType(str, Enum):
+    all = "all"
+    direct = "direct"
+    group = "group"
+
+
+def _apply_thread_type(query, thread_type: ThreadType):
+    if thread_type == ThreadType.direct:
+        query = query.filter(Message.participant_count == 2)
+    elif thread_type == ThreadType.group:
+        query = query.filter(Message.participant_count > 2)
+    return query
+
+
 @router.get("/messages", response_model=List[MessageOut])
 def list_messages(
     platform: Optional[str] = None,
     thread_id: Optional[str] = None,
     sender_name: Optional[str] = None,
-    participant_count: Optional[int] = None,
+    thread_type: ThreadType = Query(ThreadType.direct, description="all, direct (1:1), or group"),
     limit: int = Query(100, le=1000),
     db: Session = Depends(get_db),
 ):
@@ -30,14 +45,13 @@ def list_messages(
         query = query.filter(Message.thread_id == thread_id)
     if sender_name:
         query = query.filter(Message.sender_name == sender_name)
-    if participant_count is not None:
-        query = query.filter(Message.participant_count == participant_count)
+    query = _apply_thread_type(query, thread_type)
     return query.order_by(Message.timestamp_ms).limit(limit).all()
 
 
 @router.get("/threads")
 def list_threads(
-    participant_count: Optional[int] = None,
+    thread_type: ThreadType = Query(ThreadType.direct, description="all, direct (1:1), or group"),
     db: Session = Depends(get_db),
 ):
     query = db.query(
@@ -45,8 +59,7 @@ def list_threads(
         Message.platform,
         Message.participant_count,
     ).distinct()
-    if participant_count is not None:
-        query = query.filter(Message.participant_count == participant_count)
+    query = _apply_thread_type(query, thread_type)
     rows = query.all()
     return [{"thread_id": r[0], "platform": r[1], "participant_count": r[2]} for r in rows]
 
