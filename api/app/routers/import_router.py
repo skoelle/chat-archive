@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session
 from app.auth import verify_api_key
 from app.db import get_db
 from app.models import Message
-from app.schemas import RawThreadPayload, ImportResult
-from app.parsers.instagram import parse_instagram_thread
 from app.parsers.facebook import parse_facebook_thread
 from app.parsers.facebook_e2ee import parse_facebook_e2ee_thread
+from app.parsers.instagram import parse_instagram_thread
+from app.schemas import ImportResult, RawThreadPayload
 
 router = APIRouter(prefix="/import", dependencies=[Depends(verify_api_key)])
 

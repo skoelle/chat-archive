@@ -25,6 +25,42 @@ docker run -d --name chat-archive-api \
   chat-archive-api
 ```
 
+## Data model
+
+Single table `messages`:
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | BigInteger, PK | Auto-increment |
+| `platform` | String | `instagram` \| `facebook` |
+| `thread_id` | String, indexed | Folder name from takeout ZIP |
+| `sender_name` | String, indexed | Who sent the message |
+| `timestamp_ms` | BigInteger | Unix timestamp in milliseconds |
+| `content` | Text, nullable | Message text (null for photos/videos) |
+| `message_type` | String | `text` \| `photo` \| `video` \| `audio` \| `share` |
+| `reactions` | JSON, nullable | `[{"actor": "Name", "reaction": "❤"}]` |
+
+### Message object
+
+```json
+{
+  "id": 1234,
+  "platform": "facebook",
+  "thread_id": "john-doe_123456789",
+  "sender_name": "John Doe",
+  "timestamp_ms": 1715160207074,
+  "content": "Hey, wanna grab lunch?",
+  "message_type": "text",
+  "reactions": [
+    {"actor": "Jane Smith", "reaction": "❤"},
+    {"actor": "John Doe", "reaction": "😂"}
+  ]
+}
+```
+
+`reactions` is `null` when no reactions exist. When present, it is an array
+of objects with `actor` (who reacted) and `reaction` (the emoji).
+
 ## Endpoints
 
 ### Import
@@ -46,6 +82,15 @@ All import endpoints accept a JSON body:
 The `thread_id` is derived from the folder name inside the takeout ZIP.
 The importer sends each JSON file found in the extracted ZIP automatically.
 
+#### Import response
+
+```json
+{
+  "rows_inserted": 42,
+  "thread_id": "john-doe_123456789"
+}
+```
+
 ### Query
 
 | Method | Path | Purpose |
@@ -58,13 +103,69 @@ The importer sends each JSON file found in the extracted ZIP automatically.
 
 Filter messages by platform, thread, or sender.
 
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| platform | str | no | Filter by platform (`instagram`, `facebook`) |
+| thread_id | str | no | Filter by thread ID |
+| sender_name | str | no | Filter by sender name |
+| limit | int | no | Max messages (default: 100, max: 1000) |
+
+**Example:**
+
+```bash
+curl -H "X-API-Key: $TOKEN" \
+  "http://localhost:8420/messages?platform=facebook&sender_name=John+Doe&limit=100"
 ```
-GET /messages?platform=facebook&sender_name=John+Doe&limit=100
+
+**Response:**
+
+```json
+[
+  {
+    "id": 1234,
+    "platform": "facebook",
+    "thread_id": "john-doe_123456789",
+    "sender_name": "John Doe",
+    "timestamp_ms": 1715160207074,
+    "content": "Hey, wanna grab lunch?",
+    "message_type": "text",
+    "reactions": null
+  },
+  {
+    "id": 1235,
+    "platform": "facebook",
+    "thread_id": "john-doe_123456789",
+    "sender_name": "Jane Smith",
+    "timestamp_ms": 1715160250000,
+    "content": "Sure, let's meet at noon!",
+    "message_type": "text",
+    "reactions": [
+      {"actor": "John Doe", "reaction": "👍"}
+    ]
+  }
+]
 ```
 
 #### GET /threads
 
 Returns a list of all distinct `thread_id` + `platform` combinations.
+
+**Example:**
+
+```bash
+curl -H "X-API-Key: $TOKEN" "http://localhost:8420/threads"
+```
+
+**Response:**
+
+```json
+[
+  {"thread_id": "john-doe_123456789", "platform": "facebook"},
+  {"thread_id": "jane-smith_987654321", "platform": "instagram"}
+]
+```
 
 #### GET /conversation
 
@@ -116,7 +217,33 @@ curl -H "X-API-Key: $TOKEN" \
       "sender_name": "John Doe",
       "timestamp_ms": 1715160207074,
       "content": "Hey, wanna grab lunch?",
-      "message_type": "text"
+      "message_type": "text",
+      "reactions": null
+    },
+    {
+      "id": 1235,
+      "platform": "instagram",
+      "thread_id": "jane-smith_987654321",
+      "sender_name": "Jane Smith",
+      "timestamp_ms": 1715160300000,
+      "content": "Sure, sounds great!",
+      "message_type": "text",
+      "reactions": [
+        {"actor": "John Doe", "reaction": "❤"}
+      ]
+    },
+    {
+      "id": 1236,
+      "platform": "facebook",
+      "thread_id": "john-doe_123456789",
+      "sender_name": "John Doe",
+      "timestamp_ms": 1715200000000,
+      "content": null,
+      "message_type": "photo",
+      "reactions": [
+        {"actor": "Jane Smith", "reaction": "😍"},
+        {"actor": "John Doe", "reaction": "👍"}
+      ]
     }
   ]
 }

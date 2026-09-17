@@ -46,9 +46,19 @@ def parse_facebook_e2ee_thread(thread_id: str, raw_json: dict) -> list[dict]:
             "timestamp_ms": msg.get("timestamp", 0),
             "content": content,
             "message_type": message_type,
+            "reactions": _extract_reactions(msg.get("reactions", [])),
         })
 
     return messages
+
+
+def _extract_reactions(raw_reactions: list) -> list[dict] | None:
+    if not raw_reactions:
+        return None
+    return [
+        {"actor": fix_mojibake(r.get("actor", "")), "reaction": fix_mojibake(r.get("reaction", ""))}
+        for r in raw_reactions
+    ]
 
 
 def _detect_message_type(msg: dict) -> str:

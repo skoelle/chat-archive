@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Stefan Koelle (https://stefankoelle.de)
 # Licensed under the MIT License. See LICENSE file in project root for details.
 
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -19,8 +19,9 @@ class MessageOut(BaseModel):
     thread_id: str
     sender_name: str
     timestamp_ms: int
-    content: Optional[str]
+    content: str | None
     message_type: str
+    reactions: list[dict] | None = None
 
     class Config:
         from_attributes = True

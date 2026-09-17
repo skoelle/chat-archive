@@ -46,8 +46,16 @@ def parse_instagram_thread(thread_id: str, raw_json: dict) -> list[dict]:
             "timestamp_ms": msg.get("timestamp_ms", 0),
             "content": fix_mojibake(msg.get("content")),
             "message_type": message_type,
+            "reactions": _extract_reactions(msg.get("reactions", [])),
         })
 
-    # TODO: add reactions, group name changes, call events etc. from the
-    # reference implementation if needed.
     return messages
+
+
+def _extract_reactions(raw_reactions: list) -> list[dict] | None:
+    if not raw_reactions:
+        return None
+    return [
+        {"actor": fix_mojibake(r.get("actor", "")), "reaction": fix_mojibake(r.get("reaction", ""))}
+        for r in raw_reactions
+    ]

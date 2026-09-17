@@ -56,6 +56,7 @@ Single table `messages`:
 - `timestamp_ms` (BigInteger)
 - `content` (Text, nullable)
 - `message_type` (String: `text` | `photo` | `video` | `audio` | `share`)
+- `reactions` (JSON, nullable: `[{"actor": "Name", "reaction": "❤"}]`)
 
 ## API endpoints
 
@@ -63,8 +64,10 @@ Single table `messages`:
 |---|---|---|---|
 | POST | `/import/instagram` | X-API-Key | Parse and store Instagram thread |
 | POST | `/import/facebook` | X-API-Key | Parse and store Facebook thread |
+| POST | `/import/facebook-e2ee` | X-API-Key | Parse and store Facebook E2EE thread |
 | GET | `/messages` | X-API-Key | Query messages with filters |
 | GET | `/threads` | X-API-Key | List distinct threads |
+| GET | `/conversation` | X-API-Key | Merged conversation across platforms |
 | GET | `/health` | none | Health check |
 
 ## Environment variables (api/.env)
