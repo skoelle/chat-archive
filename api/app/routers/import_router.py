@@ -34,6 +34,10 @@ def import_facebook_e2ee(payload: RawThreadPayload, db: Session = Depends(get_db
 
 
 def _persist(db: Session, platform: str, thread_id: str, parsed: list[dict]) -> ImportResult:
+    db.query(Message).filter(
+        Message.platform == platform,
+        Message.thread_id == thread_id,
+    ).delete()
     for item in parsed:
         db.add(Message(platform=platform, **item))
     db.commit()
