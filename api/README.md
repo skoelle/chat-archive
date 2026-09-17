@@ -304,7 +304,7 @@ person on Instagram + Facebook).
 
 ```bash
 curl -X POST -H "X-API-Key: $TOKEN" -H "Content-Type: application/json" \
-  -d '{"display_name": "Jane Doe", "thread_id": "mareikija_525260105537291", "platform": "instagram"}' \
+  -d '{"display_name": "Jane Doe", "thread_id": "janedoe_394923402", "platform": "instagram"}' \
   "http://localhost:8420/contacts/"
 ```
 
