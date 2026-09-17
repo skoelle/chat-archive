@@ -70,17 +70,18 @@ def list_threads(
 def get_conversation(
     contact_names: list[str] = Query(..., description="Name(s) of the contact (same person across platforms)"),
     platform: Optional[str] = None,
+    thread_type: ThreadType = Query(ThreadType.direct, description="all, direct (1:1), or group"),
+    order: str = Query("asc", description="asc (oldest first) or desc (newest first)"),
     offset: int = Query(0, ge=0),
     limit: int = Query(200, le=5000),
     db: Session = Depends(get_db),
 ):
-    thread_ids = (
+    thread_query = (
         db.query(Message.thread_id)
         .filter(Message.sender_name.in_(contact_names))
-        .distinct()
-        .all()
     )
-    thread_ids = [r[0] for r in thread_ids]
+    thread_query = _apply_thread_type(thread_query, thread_type)
+    thread_ids = [r[0] for r in thread_query.distinct().all()]
 
     if not thread_ids:
         return ConversationResult(total=0, offset=offset, limit=limit, messages=[])
@@ -90,9 +91,10 @@ def get_conversation(
         query = query.filter(Message.platform == platform)
 
     total = query.count()
+    order_col = Message.timestamp_ms.desc() if order == "desc" else Message.timestamp_ms.asc()
     messages = (
         query
-        .order_by(Message.timestamp_ms)
+        .order_by(order_col)
         .offset(offset)
         .limit(limit)
         .all()

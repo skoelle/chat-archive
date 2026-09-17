@@ -71,10 +71,11 @@ Single table `messages`:
 | GET | `/conversation` | X-API-Key | Merged conversation across platforms |
 | GET | `/health` | none | Health check |
 
-`/messages` and `/threads` accept `?thread_type=direct|group|all` (default:
-`direct` = 1:1 chats with exactly 2 participants).
+`/messages`, `/threads` and `/conversation` accept `?thread_type=direct|group|all`
+(default: `direct` = 1:1 chats with exactly 2 participants).
 
-`/messages` also accepts `?order=asc|desc` (default: `asc` = oldest first).
+`/messages` and `/conversation` also accept `?order=asc|desc` (default: `asc` =
+oldest first).
 
 ## Environment variables (api/.env)
 
