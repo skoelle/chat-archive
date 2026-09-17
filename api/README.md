@@ -27,7 +27,7 @@ docker run -d --name chat-archive-api \
 
 ## Data model
 
-Single table `messages`:
+### `messages`
 
 | Column | Type | Description |
 |---|---|---|
@@ -39,6 +39,18 @@ Single table `messages`:
 | `content` | Text, nullable | Message text (null for photos/videos) |
 | `message_type` | String | `text` \| `photo` \| `video` \| `audio` \| `share` |
 | `reactions` | JSON, nullable | `[{"actor": "Name", "reaction": "❤"}]` |
+| `participant_count` | Integer, nullable | Number of participants in thread (2 = 1:1 chat) |
+
+### `contact_mappings`
+
+Maps display names to thread_ids for cross-platform contact resolution.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer, PK | Auto-increment |
+| `display_name` | String, indexed | Real name, e.g. "Mareike Wüste" |
+| `thread_id` | String, indexed | Thread ID in messages table |
+| `platform` | String, nullable | `instagram` \| `facebook` \| null (any) |
 
 ### Message object
 
@@ -54,7 +66,8 @@ Single table `messages`:
   "reactions": [
     {"actor": "Jane Smith", "reaction": "❤"},
     {"actor": "John Doe", "reaction": "😂"}
-  ]
+  ],
+  "participant_count": 2
 }
 ```
 
@@ -98,6 +111,9 @@ The importer sends each JSON file found in the extracted ZIP automatically.
 | GET | /messages | Query individual messages with filters |
 | GET | /threads | List all imported threads |
 | GET | /conversation | Merged conversation across platforms |
+| GET | /contacts/ | List all contact mappings |
+| POST | /contacts/ | Create contact mapping |
+| DELETE | /contacts/{id} | Delete contact mapping |
 
 #### GET /messages
 
@@ -109,14 +125,25 @@ Filter messages by platform, thread, or sender.
 |---|---|---|---|
 | platform | str | no | Filter by platform (`instagram`, `facebook`) |
 | thread_id | str | no | Filter by thread ID |
-| sender_name | str | no | Filter by sender name |
+| sender_name | str | no | Filter by sender name (LIKE search with umlaut normalization) |
+| thread_type | str | no | `direct` (default), `group`, or `all` |
+| order | str | no | `asc` (default, oldest first) or `desc` (newest first) |
 | limit | int | no | Max messages (default: 100, max: 1000) |
 
-**Example:**
+**Examples:**
 
 ```bash
+# All 1:1 messages with John Doe
 curl -H "X-API-Key: $TOKEN" \
-  "http://localhost:8420/messages?platform=facebook&sender_name=John+Doe&limit=100"
+  "http://localhost:8420/messages?sender_name=John+Doe"
+
+# Group chats only, newest first
+curl -H "X-API-Key: $TOKEN" \
+  "http://localhost:8420/messages?thread_type=group&order=desc"
+
+# Facebook messages from a specific thread
+curl -H "X-API-Key: $TOKEN" \
+  "http://localhost:8420/messages?platform=facebook&thread_id=john-doe_123456789"
 ```
 
 **Response:**
@@ -131,19 +158,8 @@ curl -H "X-API-Key: $TOKEN" \
     "timestamp_ms": 1715160207074,
     "content": "Hey, wanna grab lunch?",
     "message_type": "text",
-    "reactions": null
-  },
-  {
-    "id": 1235,
-    "platform": "facebook",
-    "thread_id": "john-doe_123456789",
-    "sender_name": "Jane Smith",
-    "timestamp_ms": 1715160250000,
-    "content": "Sure, let's meet at noon!",
-    "message_type": "text",
-    "reactions": [
-      {"actor": "John Doe", "reaction": "👍"}
-    ]
+    "reactions": null,
+    "participant_count": 2
   }
 ]
 ```
@@ -152,26 +168,37 @@ curl -H "X-API-Key: $TOKEN" \
 
 Returns a list of all distinct `thread_id` + `platform` combinations.
 
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| thread_type | str | no | `direct` (default), `group`, or `all` |
+
 **Example:**
 
 ```bash
+# Only 1:1 threads
 curl -H "X-API-Key: $TOKEN" "http://localhost:8420/threads"
+
+# All threads including groups
+curl -H "X-API-Key: $TOKEN" "http://localhost:8420/threads?thread_type=all"
 ```
 
 **Response:**
 
 ```json
 [
-  {"thread_id": "john-doe_123456789", "platform": "facebook"},
-  {"thread_id": "jane-smith_987654321", "platform": "instagram"}
+  {"thread_id": "john-doe_123456789", "platform": "facebook", "participant_count": 2},
+  {"thread_id": "jane-smith_987654321", "platform": "instagram", "participant_count": 2}
 ]
 ```
 
 #### GET /conversation
 
-Retrieve a merged, chronologically sorted conversation with a specific
-contact across one or more platforms. This is the primary endpoint for
-chat analysis.
+Retrieve a merged conversation with a specific contact across one or more
+platforms. Searches by `sender_name` AND by `contact_mappings` table (allows
+mapping display names like "Mareike Wüste" to thread_ids where sender_name
+differs).
 
 **Parameters:**
 
@@ -179,15 +206,21 @@ chat analysis.
 |---|---|---|---|
 | contact_names | list[str] | yes | Name(s) of the contact (same person across platforms) |
 | platform | str | no | Filter to a specific platform (`instagram`, `facebook`) |
+| thread_type | str | no | `direct` (default), `group`, or `all` |
+| order | str | no | `asc` (default, oldest first) or `desc` (newest first) |
 | offset | int | no | Pagination offset (default: 0) |
 | limit | int | no | Max messages to return (default: 200, max: 5000) |
 
 **Examples:**
 
 ```bash
-# All messages with John Doe (all platforms)
+# All 1:1 messages with John Doe
 curl -H "X-API-Key: $TOKEN" \
   "http://localhost:8420/conversation?contact_names=John+Doe"
+
+# Include group chats
+curl -H "X-API-Key: $TOKEN" \
+  "http://localhost:8420/conversation?contact_names=John+Doe&thread_type=all"
 
 # Only Facebook messages
 curl -H "X-API-Key: $TOKEN" \
@@ -197,9 +230,9 @@ curl -H "X-API-Key: $TOKEN" \
 curl -H "X-API-Key: $TOKEN" \
   "http://localhost:8420/conversation?contact_names=John+Doe&contact_names=john.doe"
 
-# Paginated: page 2 with 100 messages per page
+# Newest first
 curl -H "X-API-Key: $TOKEN" \
-  "http://localhost:8420/conversation?contact_names=John+Doe&offset=100&limit=100"
+  "http://localhost:8420/conversation?contact_names=John+Doe&order=desc"
 ```
 
 **Response:**
@@ -218,7 +251,8 @@ curl -H "X-API-Key: $TOKEN" \
       "timestamp_ms": 1715160207074,
       "content": "Hey, wanna grab lunch?",
       "message_type": "text",
-      "reactions": null
+      "reactions": null,
+      "participant_count": 2
     },
     {
       "id": 1235,
@@ -230,7 +264,8 @@ curl -H "X-API-Key: $TOKEN" \
       "message_type": "text",
       "reactions": [
         {"actor": "John Doe", "reaction": "❤"}
-      ]
+      ],
+      "participant_count": 2
     },
     {
       "id": 1236,
@@ -243,10 +278,29 @@ curl -H "X-API-Key: $TOKEN" \
       "reactions": [
         {"actor": "Jane Smith", "reaction": "😍"},
         {"actor": "John Doe", "reaction": "👍"}
-      ]
+      ],
+      "participant_count": 2
     }
   ]
 }
+```
+
+### Contact Mappings
+
+Manage display name → thread_id mappings for cross-platform contact resolution.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | /contacts/ | List all mappings |
+| POST | /contacts/ | Create a mapping |
+| DELETE | /contacts/{id} | Delete a mapping |
+
+#### POST /contacts/
+
+```bash
+curl -X POST -H "X-API-Key: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"display_name": "Mareike Wüste", "thread_id": "mareikija_525260105537291", "platform": "instagram"}' \
+  "http://localhost:8420/contacts/"
 ```
 
 ### Health
