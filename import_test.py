@@ -41,9 +41,10 @@ def get_db():
         f"@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
     )
     engine = create_engine(url, pool_pre_ping=True)
-    # Drop and recreate to pick up schema changes (e.g. new columns)
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    # Only drop/recreate messages table, preserve contact_mappings
+    Message.__table__.drop(bind=engine, checkfirst=True)
+    Message.__table__.create(bind=engine)
+    Base.metadata.create_all(bind=engine)  # creates contact_mappings if missing
     return sessionmaker(autocommit=False, autoflush=False, bind=engine)()
 
 
