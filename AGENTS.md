@@ -66,7 +66,7 @@ chat-archive/
 ### `contact_mappings`
 Maps display names to thread_ids for cross-platform contact resolution.
 - `id` (Integer, PK, auto-increment)
-- `display_name` (String, indexed): real name, e.g. "Mareike Wüste"
+- `display_name` (String, indexed): real name, e.g. "Jane Doe"
 - `thread_id` (String, indexed): thread_id in messages table
 - `platform` (String, nullable): `instagram` | `facebook` | `xing` | `linkedin` | null (any)
 
@@ -82,6 +82,7 @@ Maps display names to thread_ids for cross-platform contact resolution.
 | GET | `/messages` | X-API-Key | Query messages (default: 1:1 chats) |
 | GET | `/threads` | X-API-Key | List distinct threads (default: 1:1 chats, optional `?platform=`) |
 | GET | `/conversation` | X-API-Key | Merged conversation across platforms |
+| GET | `/contacts/top` | X-API-Key | Contacts ranked by received messages |
 | GET | `/contacts/` | X-API-Key | List all contact mappings |
 | POST | `/contacts/` | X-API-Key | Create contact mapping |
 | DELETE | `/contacts/{id}` | X-API-Key | Delete contact mapping |
@@ -103,7 +104,7 @@ MYSQL_PORT=3306
 MYSQL_USER=root
 MYSQL_PASSWORD=secret
 MYSQL_DATABASE=chat_archive
-OWN_NAME=Stefan Kölle
+OWN_NAME=Jörg Beispiel
 ```
 
 `OWN_NAME` is your own display name. The XING parser uses it to tell your
@@ -188,7 +189,7 @@ npm run tauri build
 - `strip_html`, `slugify`, `fold_name`, `dedupe` and the `BulkParseResult` type
   live in `app/parsers/common.py` and are shared by the XING and LinkedIn
   parsers. `fold_name()` folds umlauts (ü→ue, ö→oe, ä→ae, ß→ss) + lowercases,
-  so `OWN_NAME=Stefan Kölle` matches LinkedIn's `Stefan Koelle`.
+  so `OWN_NAME=Jörg Beispiel` matches LinkedIn's `Joerg Beispiel`.
 - LinkedIn: the export is a flat directory of CSVs, every file is classified by
   its header row and files with an unknown header are ignored:
   `messages.csv` (11 columns), `Notes.csv` (`Connection First Name,...`, usually
@@ -216,8 +217,8 @@ npm run tauri build
 - `participant_count` is stored per message and used to filter threads:
   `?thread_type=direct` (2 participants), `?thread_type=group` (>2), `?thread_type=all`.
 - `/conversation` searches by `sender_name` AND by `contact_mappings` table.
-  This allows mapping display names (e.g. "Mareike Wüste") to thread_ids
-  (e.g. "mareikija_525260105537291") where the sender_name differs.
+  This allows mapping display names (e.g. "Jane Doe") to thread_ids
+  (e.g. "janedoe_123456789") where the sender_name differs.
 - Name search uses LIKE with umlaut normalization: ü matches ue, ö matches oe,
   ä matches ae, ß matches ss (and vice versa).
 - `import_test.py` is a standalone script for testing the full parse+DB pipeline

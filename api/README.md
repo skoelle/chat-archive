@@ -154,6 +154,7 @@ bulk import): `{"rows_inserted": 1049, "thread_id": "linkedin", "threads": 696}`
 | GET | /messages | Query individual messages with filters |
 | GET | /threads | List all imported threads |
 | GET | /conversation | Merged conversation across platforms |
+| GET | /contacts/top | Contacts ranked by received messages |
 | GET | /contacts/ | List all contact mappings |
 | POST | /contacts/ | Create contact mapping |
 | DELETE | /contacts/{id} | Delete contact mapping |
@@ -341,6 +342,36 @@ Manage display name → thread_id mappings for cross-platform contact resolution
 | GET | /contacts/ | List all mappings |
 | POST | /contacts/ | Add a new mapping |
 | DELETE | /contacts/{id} | Delete a single mapping by ID |
+
+#### GET /contacts/top
+
+Contacts ranked by the number of messages they sent you. Only received
+messages are counted (your own messages are excluded), and sender names are
+resolved via `contact_mappings` (thread_id → display name), so a nickname like
+`jdoe_123` shows up as `Jane Doe`. Names that fold to the same value
+(umlaut/case) are merged.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| platform | str | no | Filter by platform (`instagram`, `facebook`, `xing`, `linkedin`) |
+| limit | int | no | Max contacts to return (default: 50, max: 1000) |
+
+**Example:**
+
+```bash
+curl -H "X-API-Key: $TOKEN" "http://localhost:8420/contacts/top?limit=10"
+```
+
+**Response:**
+
+```json
+[
+  {"name": "Jane Doe", "message_count": 4218},
+  {"name": "John Doe", "message_count": 1337}
+]
+```
 
 #### POST /contacts/
 
