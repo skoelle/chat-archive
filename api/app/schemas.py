@@ -13,17 +13,16 @@ class RawThreadPayload(BaseModel):
     raw_json: Any  # intentionally untyped, see app/parsers/*.py for the structure
 
 
-class XingFile(BaseModel):
-    """One raw CSV file of a XING data export."""
+class CsvFile(BaseModel):
+    """One raw CSV file of a bulk export (XING, LinkedIn)."""
     path: str = ""
     content: str
 
 
-class RawXingPayload(BaseModel):
-    """All CSV files of a XING export in one request (messages, notes,
-    contact dates). The importer does not parse them, the API classifies each
-    file by its header row."""
-    files: list[XingFile]
+class RawCsvPayload(BaseModel):
+    """All CSV files of one bulk export in a single request. The importer does
+    not parse them, the API classifies each file by its header row."""
+    files: list[CsvFile]
 
 
 class MessageOut(BaseModel):
@@ -51,4 +50,4 @@ class ConversationResult(BaseModel):
 class ImportResult(BaseModel):
     rows_inserted: int
     thread_id: str
-    threads: int = 0  # only set for bulk imports (XING), 0 otherwise
+    threads: int = 0  # only set for bulk imports (XING, LinkedIn), 0 otherwise

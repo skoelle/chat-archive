@@ -3,8 +3,8 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
-const PLATFORMS = ["instagram", "facebook", "facebook-e2ee", "xing"];
-const selected = { instagram: null, facebook: null, "facebook-e2ee": null, xing: null };
+const PLATFORMS = ["instagram", "facebook", "facebook-e2ee", "xing", "linkedin"];
+const selected = { instagram: null, facebook: null, "facebook-e2ee": null, xing: null, linkedin: null };
 const logEl = document.getElementById("log-output");
 const progressEl = document.getElementById("progress");
 const importBtn = document.getElementById("btn-import");
@@ -63,9 +63,11 @@ document.getElementById("btn-import").addEventListener("click", async () => {
 
     log(`--- Starting import: ${platform} ---`);
     try {
-      // A single XING CSV is forwarded as is, everything else is a ZIP that
-      // has to be extracted first.
-      const isRawCsv = platform === "xing" && path.toLowerCase().endsWith(".csv");
+      // A single CSV of a bulk export (XING, LinkedIn) is forwarded as is,
+      // everything else is a ZIP that has to be extracted first.
+      const isRawCsv =
+        ["xing", "linkedin"].includes(platform) &&
+        path.toLowerCase().endsWith(".csv");
       let extracted = path;
       if (!isRawCsv) {
         extracted = await invoke("extract_takeout", { zipPath: path, platform });
@@ -85,3 +87,5 @@ document.getElementById("btn-import").addEventListener("click", async () => {
 setupDropzone("drop-instagram", "instagram");
 setupDropzone("drop-facebook", "facebook");
 setupDropzone("drop-facebook-e2ee", "facebook-e2ee");
+setupDropzone("drop-xing", "xing");
+setupDropzone("drop-linkedin", "linkedin");

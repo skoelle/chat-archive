@@ -11,7 +11,7 @@ class Message(Base):
     __tablename__ = "messages"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    platform = Column(String(20), nullable=False)          # instagram | facebook | xing
+    platform = Column(String(20), nullable=False)          # instagram | facebook | xing | linkedin
     thread_id = Column(String(255), nullable=False)
     sender_name = Column(String(255), nullable=False)
     timestamp_ms = Column(BigInteger, nullable=False)
@@ -35,7 +35,7 @@ class ContactMapping(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     display_name = Column(String(255), nullable=False)     # real name, e.g. "Mareike Wüste"
     thread_id = Column(String(255), nullable=False)        # thread_id in messages table
-    platform = Column(String(20), nullable=True)            # instagram | facebook | null (any)
+    platform = Column(String(20), nullable=True)            # instagram | facebook | xing | linkedin | null (any)
 
     __table_args__ = (
         Index("idx_mapping_display", "display_name"),

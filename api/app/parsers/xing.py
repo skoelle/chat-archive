@@ -32,38 +32,35 @@ converted to plain text by strip_html().
 Thread ids:
   messages:  xing_<slug(betreff)>_<sha1(teilnehmer|betreff|zeitstempel)[:8]>
   notes:     xing-notiz-<slug(name)>
+
+slugify(), dedupe() and strip_html() are shared with the LinkedIn parser and
+live in app.parsers.common.
 """
 
 import csv
 import hashlib
 import io
-import re
 from collections import Counter
 from datetime import datetime, timezone
-from html.parser import HTMLParser
-from typing import NamedTuple
+
+from app.parsers.common import (
+    BulkParseResult,
+    dedupe,
+    slugify,
+    unique,
+)
+from app.parsers.common import (
+    strip_html as _strip_html,
+)
 
 MSG_PREFIX = "xing_"
 NOTE_PREFIX = "xing-notiz-"
 
-UMAP = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss",
-                      "Ä": "Ae", "Ö": "Oe", "Ü": "Ue"})
-
-_HTML_TAG = re.compile(r"</?[a-zA-Z][^>]*>")
-_BLOCK_TAGS = frozenset({"p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4",
-                         "blockquote", "section"})
-_SKIP_TAGS = frozenset({"script", "style", "head", "title"})
+# Result type is shared with the other bulk parsers (LinkedIn).
+XingParseResult = BulkParseResult
 
 
-class XingParseResult(NamedTuple):
-    messages: list[dict]          # rows for conversation blocks (platform added by caller)
-    notes: list[dict]             # rows for note threads (notes + contact dates)
-    mappings: list[tuple[str, str]]  # (display_name, thread_id) to be stored as contact_mappings
-    kinds: set[str]               # "messages" | "notes" | "contacts" present in the payload
-    own_name: str                 # sender treated as "myself"
-
-
-def parse_xing_files(files: list[dict], own_name: str = "") -> XingParseResult:
+def parse_xing_files(files: list[dict], own_name: str = "") -> BulkParseResult:
     """Parse raw XING CSV files.
 
     files: [{"path": "...", "content": "..."}]
@@ -101,10 +98,10 @@ def parse_xing_files(files: list[dict], own_name: str = "") -> XingParseResult:
     if own:
         mappings = [(name, thread_id) for name, thread_id in mappings if name != own]
 
-    return XingParseResult(
+    return BulkParseResult(
         messages=message_rows,
         notes=note_rows,
-        mappings=_dedupe(mappings),
+        mappings=dedupe(mappings),
         kinds=kinds,
         own_name=own,
     )
@@ -269,26 +266,12 @@ def _counterpart(block: dict, own: str) -> str | None:
         return others[0]
 
     # Participant list only contains myself: fall back to the other sender.
-    other_senders = _unique(
+    other_senders = unique(
         row[3].strip() for row in block["messages"] if row[3].strip() and row[3].strip() != own
     )
     if len(other_senders) == 1:
         return other_senders[0]
     return None
-
-
-def _unique(values) -> list[str]:
-    return list(dict.fromkeys(values))
-
-
-def _dedupe(pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
-    return list(dict.fromkeys(pairs))
-
-
-def slugify(text: str, max_len: int = 40) -> str:
-    text = (text or "").translate(UMAP).lower()
-    text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
-    return text[:max_len].strip("-") or "ohne-betreff"
 
 
 def _ts_to_ms(value: str) -> int | None:
@@ -302,67 +285,11 @@ def _ts_to_ms(value: str) -> int | None:
     return int(moment.timestamp() * 1000)
 
 
-def _absolute_xing_url(href: str) -> str:
-    return f"https://www.xing.com{href}" if href.startswith("/") else href
-
-
-class _HtmlToText(HTMLParser):
-    """Converts the HTML fragments XING stores as message content into text."""
-
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.parts: list[str] = []
-        self._skip = 0
-        self._links: list[tuple[str, int]] = []
-
-    def handle_starttag(self, tag, attrs):
-        if tag in _SKIP_TAGS:
-            self._skip += 1
-            return
-        if tag == "a":
-            href = dict(attrs).get("href")
-            if href:
-                self._links.append((href, len(self.parts)))
-        if tag in _BLOCK_TAGS:
-            self.parts.append("\n")
-
-    def handle_endtag(self, tag):
-        if tag in _SKIP_TAGS:
-            if self._skip:
-                self._skip -= 1
-            return
-        if tag == "a" and self._links:
-            href, start = self._links.pop()
-            label = "".join(self.parts[start:]).strip()
-            if href and href != label and not label.endswith(href):
-                self.parts.append(f" ({_absolute_xing_url(href)})")
-        if tag in _BLOCK_TAGS:
-            self.parts.append("\n")
-
-    def handle_data(self, data):
-        if not self._skip:
-            self.parts.append(data)
-
-
 def strip_html(text: str | None) -> str | None:
     """Plain text of a XING message.
 
     XING stores some messages as HTML (event invitations, newsletters,
-    forwarded mails). Tags are dropped, <br>/<p> become line breaks and link
-    targets are appended as `(https://...)`. Plain text is returned unchanged.
+    forwarded mails) - see app.parsers.common.strip_html for the rules. Link
+    targets that start with "/" are resolved against www.xing.com.
     """
-    if not text or not _HTML_TAG.search(text):
-        return text
-
-    parser = _HtmlToText()
-    try:
-        parser.feed(text)
-        parser.close()
-    except (ValueError, AssertionError, EOFError, RecursionError, UnicodeDecodeError):
-        return text  # unreadable markup: keep the original content
-
-    plain = "".join(parser.parts).replace("\xa0", " ")
-    plain = re.sub(r"[ \t]+", " ", plain)
-    plain = re.sub(r" *\n *", "\n", plain)
-    plain = re.sub(r"\n{3,}", "\n\n", plain)
-    return plain.strip() or None
+    return _strip_html(text, base_url="https://www.xing.com")

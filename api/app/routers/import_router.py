@@ -5,15 +5,16 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.auth import verify_api_key
+from app.bulk_store import store_bulk
 from app.config import settings
 from app.db import get_db
 from app.models import Message
 from app.parsers.facebook import parse_facebook_thread
 from app.parsers.facebook_e2ee import parse_facebook_e2ee_thread
 from app.parsers.instagram import parse_instagram_thread
+from app.parsers.linkedin import parse_linkedin_files
 from app.parsers.xing import parse_xing_files
-from app.schemas import ImportResult, RawThreadPayload, RawXingPayload
-from app.xing_store import store_xing
+from app.schemas import ImportResult, RawCsvPayload, RawThreadPayload
 
 router = APIRouter(prefix="/import", dependencies=[Depends(verify_api_key)])
 
@@ -37,7 +38,7 @@ def import_facebook_e2ee(payload: RawThreadPayload, db: Session = Depends(get_db
 
 
 @router.post("/xing", response_model=ImportResult)
-def import_xing(payload: RawXingPayload, db: Session = Depends(get_db)):
+def import_xing(payload: RawCsvPayload, db: Session = Depends(get_db)):
     """Bulk import of a XING data export (messages CSV + network-inquiry CSVs).
 
     Only the file kinds present in the payload are replaced: conversations
@@ -47,8 +48,25 @@ def import_xing(payload: RawXingPayload, db: Session = Depends(get_db)):
         [f.model_dump() for f in payload.files],
         own_name=settings.own_name,
     )
-    rows, threads = store_xing(db, result)
+    rows, threads = store_bulk(db, "xing", result)
     return ImportResult(rows_inserted=rows, thread_id="xing", threads=threads)
+
+
+@router.post("/linkedin", response_model=ImportResult)
+def import_linkedin(payload: RawCsvPayload, db: Session = Depends(get_db)):
+    """Bulk import of a LinkedIn data export (messages.csv + Notes.csv +
+    Connections.csv; every other CSV in the payload is ignored).
+
+    Only the file kinds present in the payload are replaced: conversations
+    live in threads prefixed `linkedin_`, contact notes in `linkedin-notiz-`.
+    Spam messages (FOLDER=SPAM) are dropped by the parser.
+    """
+    result = parse_linkedin_files(
+        [f.model_dump() for f in payload.files],
+        own_name=settings.own_name,
+    )
+    rows, threads = store_bulk(db, "linkedin", result)
+    return ImportResult(rows_inserted=rows, thread_id="linkedin", threads=threads)
 
 
 def _persist(db: Session, platform: str, thread_id: str, parsed: list[dict]) -> ImportResult:

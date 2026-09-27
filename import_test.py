@@ -9,6 +9,7 @@ Handled directories (skipped when missing):
     .tmp/fb-normal   Facebook
     .tmp/fb-e2ee     Facebook E2EE
     .tmp/xing        XING data export (all CSVs, bulk import)
+    .tmp/linkedin    LinkedIn data export (all CSVs, bulk import)
 
 Every directory that exists is (re-)imported, replacing only its own threads.
 
@@ -22,7 +23,7 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 load_dotenv()
@@ -37,12 +38,13 @@ TMP_DIR = Path(__file__).parent / ".tmp"
 
 # Add api/ to path so we can import the parsers
 sys.path.insert(0, str(Path(__file__).parent / "api"))
+from app.bulk_store import store_bulk
 from app.models import Base, Message
 from app.parsers.facebook import parse_facebook_thread
 from app.parsers.facebook_e2ee import parse_facebook_e2ee_thread
 from app.parsers.instagram import parse_instagram_thread
+from app.parsers.linkedin import parse_linkedin_files
 from app.parsers.xing import parse_xing_files
-from app.xing_store import store_xing
 
 
 def get_db():
@@ -117,9 +119,9 @@ def persist(db, platform: str, thread_id: str, parsed: list[dict]):
     return len(parsed)
 
 
-def collect_xing_files(extracted_path: Path) -> list[dict]:
-    """All CSV files of an extracted XING export (messages + network-inquiry).
-    The API parser classifies them by header row, so no filtering here."""
+def collect_csv_files(extracted_path: Path) -> list[dict]:
+    """All CSV files of a bulk export (XING, LinkedIn). The API parser
+    classifies them by header row, so no filtering here."""
     return [
         {"path": str(p), "content": p.read_text(encoding="utf-8")}
         for p in sorted(extracted_path.rglob("*.csv"))
@@ -153,22 +155,32 @@ def run():
             total_rows += rows
             print(f"  {thread_id}: {rows} messages")
 
-    # XING: all CSVs of the data export in one bulk import
-    xing_dir = TMP_DIR / "xing"
-    if xing_dir.exists():
-        files = collect_xing_files(xing_dir)
-        if files:
-            result = parse_xing_files(files, own_name=os.getenv("OWN_NAME", ""))
-            rows, threads_found = store_xing(db, result)
-            total_threads += threads_found
-            total_rows += rows
-            print(
-                f"[xing] {len(files)} CSV files -> {threads_found} threads, "
-                f"{rows} messages (own name: {result.own_name!r}, "
-                f"kinds: {sorted(result.kinds)})"
-            )
-    else:
-        print(f"[xing] {xing_dir} not found, skipping")
+    # Bulk CSV exports: every CSV of the export in one request
+    bulk_exports = [
+        ("xing", "xing", parse_xing_files),
+        ("linkedin", "linkedin", parse_linkedin_files),
+    ]
+
+    for dir_name, platform, parser in bulk_exports:
+        export_dir = TMP_DIR / dir_name
+        if not export_dir.exists():
+            print(f"[{platform}] {export_dir} not found, skipping")
+            continue
+
+        files = collect_csv_files(export_dir)
+        if not files:
+            print(f"[{platform}] no CSV files below {export_dir}")
+            continue
+
+        result = parser(files, own_name=os.getenv("OWN_NAME", ""))
+        rows, threads_found = store_bulk(db, platform, result)
+        total_threads += threads_found
+        total_rows += rows
+        print(
+            f"[{platform}] {len(files)} CSV files -> {threads_found} threads, "
+            f"{rows} messages (own name: {result.own_name!r}, "
+            f"kinds: {sorted(result.kinds)})"
+        )
 
     print(f"\nDone: {total_threads} threads, {total_rows} messages total")
     db.close()

@@ -32,8 +32,8 @@ docker run -d --name chat-archive-api \
 | Column | Type | Description |
 |---|---|---|
 | `id` | BigInteger, PK | Auto-increment |
-| `platform` | String | `instagram` \| `facebook` \| `xing` |
-| `thread_id` | String, indexed | Folder name from takeout ZIP, `xing_<...>` / `xing-notiz-<...>` for XING |
+| `platform` | String | `instagram` \| `facebook` \| `xing` \| `linkedin` |
+| `thread_id` | String, indexed | Folder name from takeout ZIP, `xing_<...>` / `xing-notiz-<...>` for XING, `linkedin_<...>` / `linkedin-notiz-<...>` for LinkedIn |
 | `sender_name` | String, indexed | Who sent the message |
 | `timestamp_ms` | BigInteger | Unix timestamp in milliseconds |
 | `content` | Text, nullable | Message text (null for photos/videos) |
@@ -50,7 +50,7 @@ Maps display names to thread_ids for cross-platform contact resolution.
 | `id` | Integer, PK | Auto-increment |
 | `display_name` | String, indexed | Real name, e.g. "Jane Doe" |
 | `thread_id` | String, indexed | Thread ID in messages table |
-| `platform` | String, nullable | `instagram` \| `facebook` \| `xing` \| null (any) |
+| `platform` | String, nullable | `instagram` \| `facebook` \| `xing` \| `linkedin` \| null (any) |
 
 ### Message object
 
@@ -84,6 +84,7 @@ of objects with `actor` (who reacted) and `reaction` (the emoji).
 | POST | /import/facebook | Accepts raw Facebook (standard) thread JSON, parses, stores |
 | POST | /import/facebook-e2ee | Accepts raw Facebook E2EE thread JSON, parses, stores |
 | POST | /import/xing | Accepts all CSV files of a XING data export, parses, stores |
+| POST | /import/linkedin | Accepts all CSV files of a LinkedIn data export, parses, stores |
 
 The Meta endpoints (instagram, facebook, facebook-e2ee) accept a JSON body:
 ```json
@@ -116,6 +117,24 @@ of every file kind present in the payload (kind-scoped, so a payload with only
 the messages CSV leaves the notes untouched) and creates `contact_mappings`
 for every resolvable contact.
 
+#### LinkedIn (bulk import)
+
+`POST /import/linkedin` uses the same `files` payload as XING and classifies
+each CSV by header row. Relevant files:
+
+| File | Content |
+|---|---|
+| `messages.csv` | 1:1 and group conversations; `SUBJECT` becomes a leading `Betreff:` line, `ATTACHMENTS` are appended as `(Anhang: <url>)`, `FOLDER=SPAM` rows are dropped |
+| `Connections.csv` | 3 free-text preamble lines, then one synthetic thread per connection (`linkedin-notiz-<slug>`, "Verbunden am <date>" + company/position/profile URL) |
+| `Notes.csv` | connection notes (usually empty) |
+
+Every other CSV of the export (profile, ads, shares, reactions, ...) is
+ignored. Thread ids: conversations
+`linkedin_<slug(CONVERSATION TITLE|gegenüber)>_<sha1(conversation id)[:8]>`,
+notes/contacts `linkedin-notiz-<slug(name)>`. Placeholder senders
+(`LinkedIn Member`, `LinkedIn for Learning`) are stored as `sender_name` but do
+not create `contact_mappings`.
+
 #### Import response
 
 ```json
@@ -125,8 +144,8 @@ for every resolvable contact.
 }
 ```
 
-XING additionally returns `threads` (number of threads written, bulk import):
-`{"rows_inserted": 4451, "thread_id": "xing", "threads": 2352}`
+XING and LinkedIn additionally return `threads` (number of threads written,
+bulk import): `{"rows_inserted": 1049, "thread_id": "linkedin", "threads": 696}`
 
 ### Query
 
@@ -147,7 +166,7 @@ Filter messages by platform, thread, or sender.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| platform | str | no | Filter by platform (`instagram`, `facebook`) |
+| platform | str | no | Filter by platform (`instagram`, `facebook`, `xing`, `linkedin`) |
 | thread_id | str | no | Filter by thread ID |
 | sender_name | str | no | Filter by sender name (LIKE search with umlaut normalization) |
 | thread_type | str | no | `direct` (default), `group`, or `all` |
@@ -197,6 +216,7 @@ Returns a list of all distinct `thread_id` + `platform` combinations.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | thread_type | str | no | `direct` (default), `group`, or `all` |
+| platform | str | no | Filter by platform (`instagram`, `facebook`, `xing`, `linkedin`) |
 
 **Example:**
 
@@ -206,6 +226,9 @@ curl -H "X-API-Key: $TOKEN" "http://localhost:8420/threads"
 
 # All threads including groups
 curl -H "X-API-Key: $TOKEN" "http://localhost:8420/threads?thread_type=all"
+
+# Only LinkedIn threads
+curl -H "X-API-Key: $TOKEN" "http://localhost:8420/threads?platform=linkedin"
 ```
 
 **Response:**
@@ -221,7 +244,7 @@ curl -H "X-API-Key: $TOKEN" "http://localhost:8420/threads?thread_type=all"
 
 Retrieve a merged conversation with a specific contact across one or more
 platforms. Searches by `sender_name` AND by `contact_mappings` table (allows
-mapping display names like "Mareike Wüste" to thread_ids where sender_name
+mapping display names like "Jane Doe" to thread_ids where sender_name
 differs).
 
 **Parameters:**
@@ -229,7 +252,7 @@ differs).
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | contact_names | list[str] | yes | Name(s) of the contact (same person across platforms) |
-| platform | str | no | Filter to a specific platform (`instagram`, `facebook`) |
+| platform | str | no | Filter to a specific platform (`instagram`, `facebook`, `xing`, `linkedin`) |
 | thread_type | str | no | `direct` (default), `group`, or `all` |
 | order | str | no | `asc` (default, oldest first) or `desc` (newest first) |
 | offset | int | no | Pagination offset (default: 0) |

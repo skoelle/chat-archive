@@ -44,16 +44,18 @@ pub fn test_connection(base_url: &str, token: &str) -> Result<()> {
     }
 }
 
-/// Forwards every CSV file below `path` in a single request to /import/xing.
+/// Forwards every CSV file below `path` in a single request to
+/// /import/<platform> (bulk exports: XING, LinkedIn).
 ///
-/// `path` is either one dropped CSV file or an extracted XING data export
-/// (the importer does not parse CSV, it only ships file name and content;
-/// the API classifies each file by its header row).
-fn forward_xing(
+/// `path` is either one dropped CSV file or an extracted data export (the
+/// importer does not parse CSV, it only ships file name and content; the API
+/// classifies each file by its header row).
+fn forward_csv_dir(
     client: &reqwest::blocking::Client,
     endpoint: &str,
     token: &str,
     path: &str,
+    platform: &str,
 ) -> Result<ForwardSummary> {
     let given = Path::new(path);
     let base = if given.is_file() {
@@ -94,7 +96,7 @@ fn forward_xing(
         .with_context(|| format!("Request to {endpoint} failed"))?;
 
     if !resp.status().is_success() {
-        anyhow::bail!("API error ({}) for XING import", resp.status());
+        anyhow::bail!("API error ({}) for {} import", resp.status(), platform);
     }
 
     let result: ImportResult = resp.json()?;
@@ -122,8 +124,8 @@ pub fn forward_directory(
     let client = reqwest::blocking::Client::new();
     let endpoint = format!("{base_url}/import/{platform}");
 
-    if platform == "xing" {
-        return forward_xing(&client, &endpoint, token, extracted_path);
+    if platform == "xing" || platform == "linkedin" {
+        return forward_csv_dir(&client, &endpoint, token, extracted_path, platform);
     }
 
     // 1. Collect all JSON files grouped by parent directory

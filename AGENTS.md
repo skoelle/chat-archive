@@ -2,16 +2,16 @@
 
 ## Project overview
 
-`chat-archive` is a two-component system for importing Instagram, Facebook and
-XING takeout chat exports into a searchable MySQL/MariaDB database, with a REST
-API for further analysis.
+`chat-archive` is a two-component system for importing Instagram, Facebook,
+XING and LinkedIn chat exports into a searchable MySQL/MariaDB database, with a
+REST API for further analysis.
 
 ## Architecture
 
 ```
 chat-archive/
 ├── api/        Python/FastAPI service ("chat-archive-api")
-│               Receives raw takeout JSON, parses it, writes to MySQL/MariaDB,
+│               Receives raw takeout JSON/CSV, parses it, writes to MySQL/MariaDB,
 │               exposes REST endpoints for querying. Runs on port 8420.
 ├── importer/   Tauri v2 desktop tool ("takeout-message-importer")
 │               Extracts takeout ZIPs locally and forwards raw JSON to the API.
@@ -34,10 +34,12 @@ chat-archive/
 | `app/parsers/instagram.py` | Instagram thread JSON parser |
 | `app/parsers/facebook.py` | Facebook thread JSON parser |
 | `app/parsers/xing.py` | XING data export CSV parser (messages + network-inquiry) |
+| `app/parsers/linkedin.py` | LinkedIn data export CSV parser (messages + Connections) |
+| `app/parsers/common.py` | Shared bulk-parse helpers: `BulkParseResult`, `slugify`, `fold_name`, `strip_html` |
 | `app/parsers/encoding_fix.py` | Mojibake fix (UTF-8 misinterpreted as Latin-1 by Meta) |
-| `app/xing_store.py` | XING bulk persistence (prefix-scoped replace + contact_mappings) |
-| `app/routers/import_router.py` | `POST /import/instagram`, `/import/facebook` and `/import/xing` endpoints |
-| `app/routers/messages_router.py` | `GET /messages` and `GET /threads` query endpoints |
+| `app/bulk_store.py` | Bulk persistence (prefix-scoped replace + contact_mappings) for XING/LinkedIn |
+| `app/routers/import_router.py` | `POST /import/instagram`, `/import/facebook`, `/import/xing`, `/import/linkedin` endpoints |
+| `app/routers/messages_router.py` | `GET /messages`, `GET /threads` and `GET /conversation` query endpoints |
 
 ### importer/
 
@@ -52,7 +54,7 @@ chat-archive/
 
 ### `messages`
 - `id` (BigInteger, PK, auto-increment)
-- `platform` (String: `instagram` | `facebook` | `xing`)
+- `platform` (String: `instagram` | `facebook` | `xing` | `linkedin`)
 - `thread_id` (String, indexed)
 - `sender_name` (String, indexed)
 - `timestamp_ms` (BigInteger)
@@ -66,7 +68,7 @@ Maps display names to thread_ids for cross-platform contact resolution.
 - `id` (Integer, PK, auto-increment)
 - `display_name` (String, indexed): real name, e.g. "Mareike Wüste"
 - `thread_id` (String, indexed): thread_id in messages table
-- `platform` (String, nullable): `instagram` | `facebook` | `xing` | null (any)
+- `platform` (String, nullable): `instagram` | `facebook` | `xing` | `linkedin` | null (any)
 
 ## API endpoints
 
@@ -76,8 +78,9 @@ Maps display names to thread_ids for cross-platform contact resolution.
 | POST | `/import/facebook` | X-API-Key | Parse and store Facebook thread |
 | POST | `/import/facebook-e2ee` | X-API-Key | Parse and store Facebook E2EE thread |
 | POST | `/import/xing` | X-API-Key | Parse and store a whole XING export (all CSVs at once) |
+| POST | `/import/linkedin` | X-API-Key | Parse and store a whole LinkedIn export (all CSVs at once) |
 | GET | `/messages` | X-API-Key | Query messages (default: 1:1 chats) |
-| GET | `/threads` | X-API-Key | List distinct threads (default: 1:1 chats) |
+| GET | `/threads` | X-API-Key | List distinct threads (default: 1:1 chats, optional `?platform=`) |
 | GET | `/conversation` | X-API-Key | Merged conversation across platforms |
 | GET | `/contacts/` | X-API-Key | List all contact mappings |
 | POST | `/contacts/` | X-API-Key | Create contact mapping |
@@ -85,7 +88,8 @@ Maps display names to thread_ids for cross-platform contact resolution.
 | GET | `/health` | none | Health check |
 
 `/messages`, `/threads` and `/conversation` accept `?thread_type=direct|group|all`
-(default: `direct` = 1:1 chats with exactly 2 participants).
+(default: `direct` = 1:1 chats with exactly 2 participants) and `?platform=`
+for `/messages`, `/threads` and `/conversation`.
 
 `/messages` and `/conversation` also accept `?order=asc|desc` (default: `asc` =
 oldest first).
@@ -145,7 +149,8 @@ npm run tauri build
   before inserting new ones, so re-importing replaces the old data.
 - The `encoding_fix.py` module handles Meta's mojibake bug (UTF-8 bytes
   misinterpreted as Latin-1). Apply it to all string values (`sender_name`,
-  `content`) of the Instagram/Facebook parsers — never to XING (see below).
+  `content`) of the Instagram/Facebook parsers — never to the CSV exports
+  (XING/LinkedIn, see below).
 - Instagram and Facebook parsers are structurally identical — Meta uses the same
   JSON format for both takeout exports.
 - Instagram import only processes `messages/inbox/` (excludes message_requests,
@@ -180,6 +185,34 @@ npm run tauri build
   tags dropped, `<br>`/`<p>` → line break, entities decoded, link targets
   appended as `(https://...)`, `<script>`/`<style>` content removed. Verify
   with `content REGEXP '<(div|a|br|...)'` → must be 0 for `platform='xing'`.
+- `strip_html`, `slugify`, `fold_name`, `dedupe` and the `BulkParseResult` type
+  live in `app/parsers/common.py` and are shared by the XING and LinkedIn
+  parsers. `fold_name()` folds umlauts (ü→ue, ö→oe, ä→ae, ß→ss) + lowercases,
+  so `OWN_NAME=Stefan Kölle` matches LinkedIn's `Stefan Koelle`.
+- LinkedIn: the export is a flat directory of CSVs, every file is classified by
+  its header row and files with an unknown header are ignored:
+  `messages.csv` (11 columns), `Notes.csv` (`Connection First Name,...`, usually
+  empty) and `Connections.csv` (3 free-text preamble lines, then
+  `First Name,Last Name,URL,Email Address,Company,Position,Connected On`).
+  Multi-line contents are quoted, so a real CSV reader is mandatory.
+- LinkedIn messages filed as spam (`FOLDER=SPAM`, 9 of 540) are dropped — 7
+  conversations exist only because of them. `SUBJECT` becomes a leading
+  `Betreff: <subject>` line (subjects belong to a message, 29 conversations
+  have more than one) and `ATTACHMENTS` are appended as `(Anhang: <url>)`.
+- LinkedIn thread ids: conversations
+  `linkedin_<slug(CONVERSATION TITLE|gegenüber)>_<sha1(conversation id)[:8]>`,
+  notes/contacts `linkedin-notiz-<slug(name)>`. Same `autoescape=True` rule as
+  XING (`_` would otherwise match the `-` of `linkedin-notiz-`).
+- LinkedIn `Connections.csv` becomes one synthetic thread per connection
+  (`linkedin-notiz-<slug>`, content "Verbunden am <YYYY-MM-DD>" + company,
+  position, profile URL, e-mail), 524 rows. 6 connections have no name in the
+  export and are skipped; 5 duplicate names share a thread.
+- LinkedIn placeholder senders (`LinkedIn Member`, `LinkedIn for Learning`) are
+  stored as `sender_name`, but never create a `contact_mappings` entry
+  (14 anonymous conversations, 1 learning conversation).
+- The XING/LinkedIn bulk import replaces only the file kinds present in the
+  payload (`store_bulk`): a payload without `messages.csv` leaves the existing
+  conversations untouched.
 - `participant_count` is stored per message and used to filter threads:
   `?thread_type=direct` (2 participants), `?thread_type=group` (>2), `?thread_type=all`.
 - `/conversation` searches by `sender_name` AND by `contact_mappings` table.
@@ -189,10 +222,10 @@ npm run tauri build
   ä matches ae, ß matches ss (and vice versa).
 - `import_test.py` is a standalone script for testing the full parse+DB pipeline
   directly against MariaDB, bypassing the API. It imports whatever it finds in
-  `.tmp/` (`insta`, `fb-normal`, `fb-e2ee`, `xing`) and replaces those threads
-  idempotently — nothing else is touched. To test only XING, temporarily move
-  the other directories out of `.tmp/`. Uses `.env` for credentials (already
-  gitignored).
+  `.tmp/` (`insta`, `fb-normal`, `fb-e2ee`, `xing`, `linkedin`) and replaces
+  those threads idempotently — nothing else is touched. To test only one
+  platform, temporarily move the other directories out of `.tmp/`. Uses `.env`
+  for credentials (already gitignored).
 
 ## License
 

@@ -69,6 +69,7 @@ def list_messages(
 
 @router.get("/threads")
 def list_threads(
+    platform: str | None = None,
     thread_type: ThreadType = Query(ThreadType.direct, description="all, direct (1:1), or group"),
     db: Session = Depends(get_db),
 ):
@@ -77,8 +78,10 @@ def list_threads(
         Message.platform,
         Message.participant_count,
     ).distinct()
+    if platform:
+        query = query.filter(Message.platform == platform)
     query = _apply_thread_type(query, thread_type)
-    rows = query.all()
+    rows = query.order_by(Message.platform, Message.thread_id).all()
     return [{"thread_id": r[0], "platform": r[1], "participant_count": r[2]} for r in rows]
 
 
