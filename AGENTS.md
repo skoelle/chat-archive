@@ -82,7 +82,7 @@ Maps display names to thread_ids for cross-platform contact resolution.
 | GET | `/messages` | X-API-Key | Query messages (default: 1:1 chats) |
 | GET | `/threads` | X-API-Key | List distinct threads (default: 1:1 chats, optional `?platform=`) |
 | GET | `/conversation` | X-API-Key | Merged conversation across platforms |
-| GET | `/contacts/top` | X-API-Key | Contacts ranked by received messages |
+| GET | `/contacts/top` | X-API-Key | Contacts ranked by received messages (1:1 chats only) |
 | GET | `/contacts/` | X-API-Key | List all contact mappings |
 | POST | `/contacts/` | X-API-Key | Create contact mapping |
 | DELETE | `/contacts/{id}` | X-API-Key | Delete contact mapping |

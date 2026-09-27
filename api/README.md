@@ -345,11 +345,11 @@ Manage display name → thread_id mappings for cross-platform contact resolution
 
 #### GET /contacts/top
 
-Contacts ranked by the number of messages they sent you. Only received
-messages are counted (your own messages are excluded), and sender names are
-resolved via `contact_mappings` (thread_id → display name), so a nickname like
-`jdoe_123` shows up as `Jane Doe`. Names that fold to the same value
-(umlaut/case) are merged.
+Contacts ranked by the number of messages they sent you in **1:1 chats**
+(group threads are ignored). Only received messages are counted (your own
+messages are excluded), and sender names are resolved via `contact_mappings`
+(thread_id → display name), so a nickname like `jdoe_123` shows up as
+`Jane Doe`. Names that fold to the same value (umlaut/case) are merged.
 
 **Parameters:**
 

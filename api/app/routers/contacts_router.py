@@ -44,29 +44,31 @@ def top_contacts(
     limit: int = Query(50, le=1000),
     db: Session = Depends(get_db),
 ):
-    """Contacts ranked by the number of messages they sent me.
+    """Contacts ranked by the number of messages they sent me in 1:1 chats.
 
-    Only received messages are counted (my own messages are excluded). Sender
-    names are resolved via contact_mappings (thread_id -> display_name), so a
-    nickname like "mareikija" shows up as its real name. Names that fold to the
-    same value (umlaut/case) are merged and the most frequent spelling is shown.
+    Only direct chats (participant_count == 2) and only received messages are
+    counted (my own messages are excluded). Sender names are resolved via
+    contact_mappings (thread_id -> display_name), so a nickname like "mareikija"
+    shows up as its real name. Names that fold to the same value (umlaut/case)
+    are merged and the most frequent spelling is shown.
     """
     query = db.query(
         Message.thread_id,
         Message.sender_name,
         func.count(Message.id).label("message_count"),
+    ).filter(
+        Message.participant_count == 2,
     ).group_by(Message.thread_id, Message.sender_name)
     if platform:
         query = query.filter(Message.platform == platform)
 
     own = fold_name(settings.own_name)
 
-    display_by_thread = {
-        thread_id: display_name
-        for thread_id, display_name in db.query(
-            ContactMapping.thread_id, ContactMapping.display_name
-        ).all()
-    }
+    display_by_thread: dict[str, str] = {}
+    for thread_id, display_name in db.query(
+        ContactMapping.thread_id, ContactMapping.display_name
+    ).all():
+        display_by_thread.setdefault(thread_id, display_name)
 
     aggregated: dict[str, dict] = {}
     for thread_id, sender_name, count in query.all():
