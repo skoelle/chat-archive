@@ -2,9 +2,9 @@
 
 ## Project overview
 
-`chat-archive` is a two-component system for importing Instagram and Facebook
-takeout chat exports into a searchable MySQL/MariaDB database, with a REST API
-for further analysis.
+`chat-archive` is a two-component system for importing Instagram, Facebook and
+XING takeout chat exports into a searchable MySQL/MariaDB database, with a REST
+API for further analysis.
 
 ## Architecture
 
@@ -144,8 +144,8 @@ npm run tauri build
 - Import is idempotent: the API deletes all messages for a `(thread_id, platform)`
   before inserting new ones, so re-importing replaces the old data.
 - The `encoding_fix.py` module handles Meta's mojibake bug (UTF-8 bytes
-  misinterpreted as Latin-1). This must be applied to all string values
-  (`sender_name`, `content`) from both platforms.
+  misinterpreted as Latin-1). Apply it to all string values (`sender_name`,
+  `content`) of the Instagram/Facebook parsers — never to XING (see below).
 - Instagram and Facebook parsers are structurally identical — Meta uses the same
   JSON format for both takeout exports.
 - Instagram import only processes `messages/inbox/` (excludes message_requests,
@@ -188,8 +188,11 @@ npm run tauri build
 - Name search uses LIKE with umlaut normalization: ü matches ue, ö matches oe,
   ä matches ae, ß matches ss (and vice versa).
 - `import_test.py` is a standalone script for testing the full parse+DB pipeline
-  directly against MariaDB, bypassing the API. It drops and recreates the table
-  on each run. Uses `.env` for credentials (already gitignored).
+  directly against MariaDB, bypassing the API. It imports whatever it finds in
+  `.tmp/` (`insta`, `fb-normal`, `fb-e2ee`, `xing`) and replaces those threads
+  idempotently — nothing else is touched. To test only XING, temporarily move
+  the other directories out of `.tmp/`. Uses `.env` for credentials (already
+  gitignored).
 
 ## License
 

@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
 """Direct-to-DB import test.
 
-Reads extracted takeout JSONs from .tmp/, parses them with the API parsers,
+Reads extracted takeout exports from .tmp/, parses them with the API parsers,
 and inserts directly into MariaDB. Bypasses the API and Tauri entirely.
+
+Handled directories (skipped when missing):
+    .tmp/insta       Instagram
+    .tmp/fb-normal   Facebook
+    .tmp/fb-e2ee     Facebook E2EE
+    .tmp/xing        XING data export (all CSVs, bulk import)
+
+Every directory that exists is (re-)imported, replacing only its own threads.
 
 Usage:
     python import_test.py
