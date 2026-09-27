@@ -29,10 +29,12 @@ TMP_DIR = Path(__file__).parent / ".tmp"
 
 # Add api/ to path so we can import the parsers
 sys.path.insert(0, str(Path(__file__).parent / "api"))
-from app.parsers.instagram import parse_instagram_thread
+from app.models import Base, Message
 from app.parsers.facebook import parse_facebook_thread
 from app.parsers.facebook_e2ee import parse_facebook_e2ee_thread
-from app.models import Message, Base
+from app.parsers.instagram import parse_instagram_thread
+from app.parsers.xing import parse_xing_files
+from app.xing_store import store_xing
 
 
 def get_db():
@@ -107,6 +109,15 @@ def persist(db, platform: str, thread_id: str, parsed: list[dict]):
     return len(parsed)
 
 
+def collect_xing_files(extracted_path: Path) -> list[dict]:
+    """All CSV files of an extracted XING export (messages + network-inquiry).
+    The API parser classifies them by header row, so no filtering here."""
+    return [
+        {"path": str(p), "content": p.read_text(encoding="utf-8")}
+        for p in sorted(extracted_path.rglob("*.csv"))
+    ]
+
+
 def run():
     db = get_db()
     total_threads = 0
@@ -133,6 +144,23 @@ def run():
             total_threads += 1
             total_rows += rows
             print(f"  {thread_id}: {rows} messages")
+
+    # XING: all CSVs of the data export in one bulk import
+    xing_dir = TMP_DIR / "xing"
+    if xing_dir.exists():
+        files = collect_xing_files(xing_dir)
+        if files:
+            result = parse_xing_files(files, own_name=os.getenv("OWN_NAME", ""))
+            rows, threads_found = store_xing(db, result)
+            total_threads += threads_found
+            total_rows += rows
+            print(
+                f"[xing] {len(files)} CSV files -> {threads_found} threads, "
+                f"{rows} messages (own name: {result.own_name!r}, "
+                f"kinds: {sorted(result.kinds)})"
+            )
+    else:
+        print(f"[xing] {xing_dir} not found, skipping")
 
     print(f"\nDone: {total_threads} threads, {total_rows} messages total")
     db.close()

@@ -1,7 +1,7 @@
 # chat-archive
 
-Systematic import of Instagram and Facebook takeout messages into a searchable
-MySQL/MariaDB database, with a REST API for further analysis.
+Systematic import of Instagram, Facebook and XING takeout messages into a
+searchable MySQL/MariaDB database, with a REST API for further analysis.
 
 ## Architecture
 
@@ -10,7 +10,8 @@ chat-archive/
 ├── importer/   Tauri v2 desktop tool ("takeout-message-importer")
 │               extracts the takeout ZIP locally and sends the raw JSON
 │               files to the API over HTTP. Contains NO parsing or DB logic.
-│               Supports three ZIP types: Instagram, Facebook, Facebook E2EE.
+│               Supports Instagram, Facebook, Facebook E2EE and XING
+│               (XING: ZIP or a single CSV file, no parsing here either).
 ├── api/        Python/FastAPI service ("chat-archive-api")
 │               handles parsing (incl. encoding fix), normalization,
 │               writing to MySQL/MariaDB, and exposes REST endpoints
@@ -43,6 +44,7 @@ the reverse proxy instead of Authelia.
 | Instagram | Standard (snake_case) | `POST /import/instagram` |
 | Facebook | Standard (snake_case) | `POST /import/facebook` |
 | Facebook | E2EE (camelCase) | `POST /import/facebook-e2ee` |
+| XING | Data export (CSV, `.zip` or single `.csv`) | `POST /import/xing` |
 
 Use `GET /conversation?contact_names=John+Doe` to retrieve a merged,
 chronologically sorted conversation across all platforms.

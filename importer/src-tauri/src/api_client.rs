@@ -19,6 +19,8 @@ struct ImportResult {
     rows_inserted: usize,
     #[allow(dead_code)]
     thread_id: String,
+    #[serde(default)]
+    threads: usize,
 }
 
 pub struct ForwardSummary {
@@ -42,6 +44,66 @@ pub fn test_connection(base_url: &str, token: &str) -> Result<()> {
     }
 }
 
+/// Forwards every CSV file below `path` in a single request to /import/xing.
+///
+/// `path` is either one dropped CSV file or an extracted XING data export
+/// (the importer does not parse CSV, it only ships file name and content;
+/// the API classifies each file by its header row).
+fn forward_xing(
+    client: &reqwest::blocking::Client,
+    endpoint: &str,
+    token: &str,
+    path: &str,
+) -> Result<ForwardSummary> {
+    let given = Path::new(path);
+    let base = if given.is_file() {
+        given.parent().unwrap_or(Path::new(""))
+    } else {
+        given
+    };
+
+    let mut files = Vec::new();
+    for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+        if !entry.path().is_file()
+            || entry.path().extension().map(|ext| ext != "csv").unwrap_or(true)
+        {
+            continue;
+        }
+
+        let file_path = entry.into_path();
+        let content = std::fs::read_to_string(&file_path)
+            .with_context(|| format!("Could not read {:?}", file_path))?;
+        let relative = file_path.strip_prefix(base).unwrap_or(&file_path);
+
+        files.push(serde_json::json!({
+            "path": relative.to_string_lossy(),
+            "content": content,
+        }));
+    }
+
+    if files.is_empty() {
+        anyhow::bail!("No CSV file found in {}", path);
+    }
+
+    let payload = serde_json::json!({ "files": files });
+    let resp = client
+        .post(endpoint)
+        .header("X-API-Key", token)
+        .json(&payload)
+        .send()
+        .with_context(|| format!("Request to {endpoint} failed"))?;
+
+    if !resp.status().is_success() {
+        anyhow::bail!("API error ({}) for XING import", resp.status());
+    }
+
+    let result: ImportResult = resp.json()?;
+    Ok(ForwardSummary {
+        threads_sent: result.threads,
+        rows_inserted: result.rows_inserted,
+    })
+}
+
 /// Walks all thread JSON files in the extracted directory, groups them by
 /// parent directory, and posts each thread to the matching /import/<platform>
 /// endpoint of the API.
@@ -59,6 +121,10 @@ pub fn forward_directory(
 ) -> Result<ForwardSummary> {
     let client = reqwest::blocking::Client::new();
     let endpoint = format!("{base_url}/import/{platform}");
+
+    if platform == "xing" {
+        return forward_xing(&client, &endpoint, token, extracted_path);
+    }
 
     // 1. Collect all JSON files grouped by parent directory
     let mut groups: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();

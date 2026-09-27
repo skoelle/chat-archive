@@ -3,7 +3,8 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
-const selected = { instagram: null, facebook: null, "facebook-e2ee": null };
+const PLATFORMS = ["instagram", "facebook", "facebook-e2ee", "xing"];
+const selected = { instagram: null, facebook: null, "facebook-e2ee": null, xing: null };
 const logEl = document.getElementById("log-output");
 const progressEl = document.getElementById("progress");
 const importBtn = document.getElementById("btn-import");
@@ -32,7 +33,7 @@ function handleFiles(fileList, platform) {
   if (!file) return;
   selected[platform] = file.path || file.name;
   log(`[${platform}] selected: ${selected[platform]}`);
-  importBtn.disabled = !(selected.instagram || selected.facebook || selected["facebook-e2ee"]);
+  importBtn.disabled = !PLATFORMS.some((platform) => selected[platform]);
 }
 
 function apiConfig() {
@@ -56,14 +57,20 @@ document.getElementById("btn-import").addEventListener("click", async () => {
   progressEl.value = 0;
   const config = apiConfig();
 
-  for (const platform of ["instagram", "facebook", "facebook-e2ee"]) {
+  for (const platform of PLATFORMS) {
     const path = selected[platform];
     if (!path) continue;
 
     log(`--- Starting import: ${platform} ---`);
     try {
-      const extracted = await invoke("extract_takeout", { zipPath: path, platform });
-      log(`Extracted to: ${extracted}`);
+      // A single XING CSV is forwarded as is, everything else is a ZIP that
+      // has to be extracted first.
+      const isRawCsv = platform === "xing" && path.toLowerCase().endsWith(".csv");
+      let extracted = path;
+      if (!isRawCsv) {
+        extracted = await invoke("extract_takeout", { zipPath: path, platform });
+        log(`Extracted to: ${extracted}`);
+      }
 
       const result = await invoke("forward_to_api", { extractedPath: extracted, platform, config });
       log(`Sent to API: ${result.threads_sent} threads, ${result.rows_inserted} rows total`);

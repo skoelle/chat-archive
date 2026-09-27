@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     mysql_user: str
     mysql_password: str
     mysql_database: str
+    # Display name of the archive owner, used by the XING parser to tell
+    # "my" messages from the contact's (e.g. "Stefan Kölle"). When empty the
+    # parser falls back to the most frequent sender of the export.
+    own_name: str = ""
 
     @property
     def sqlalchemy_url(self) -> str:

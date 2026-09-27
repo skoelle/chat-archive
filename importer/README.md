@@ -1,8 +1,12 @@
 # takeout-message-importer
 
-Tauri v2 desktop tool. Extracts an Instagram or Facebook takeout ZIP locally
+Tauri v2 desktop tool. Extracts an Instagram, Facebook or XING ZIP locally
 and sends each thread JSON to chat-archive-api over HTTP. Intentionally
 contains no parsing or database logic, the API handles all of that.
+
+Supported inputs: Instagram takeout, Facebook takeout, Facebook E2EE takeout
+(all `.zip`) and the XING data export (`.zip` or a single `.csv` file, which
+is forwarded as raw text).
 
 ## Setup
 

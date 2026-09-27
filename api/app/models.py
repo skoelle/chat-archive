@@ -11,7 +11,7 @@ class Message(Base):
     __tablename__ = "messages"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    platform = Column(String(20), nullable=False)          # instagram | facebook
+    platform = Column(String(20), nullable=False)          # instagram | facebook | xing
     thread_id = Column(String(255), nullable=False)
     sender_name = Column(String(255), nullable=False)
     timestamp_ms = Column(BigInteger, nullable=False)

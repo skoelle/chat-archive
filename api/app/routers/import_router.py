@@ -5,12 +5,15 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.auth import verify_api_key
+from app.config import settings
 from app.db import get_db
 from app.models import Message
 from app.parsers.facebook import parse_facebook_thread
 from app.parsers.facebook_e2ee import parse_facebook_e2ee_thread
 from app.parsers.instagram import parse_instagram_thread
-from app.schemas import ImportResult, RawThreadPayload
+from app.parsers.xing import parse_xing_files
+from app.schemas import ImportResult, RawThreadPayload, RawXingPayload
+from app.xing_store import store_xing
 
 router = APIRouter(prefix="/import", dependencies=[Depends(verify_api_key)])
 
@@ -30,7 +33,22 @@ def import_facebook(payload: RawThreadPayload, db: Session = Depends(get_db)):
 @router.post("/facebook-e2ee", response_model=ImportResult)
 def import_facebook_e2ee(payload: RawThreadPayload, db: Session = Depends(get_db)):
     parsed = parse_facebook_e2ee_thread(payload.thread_id, payload.raw_json)
-    return _persist(db, "facebook", payload.thread_id, parsed)
+    return _persist(db, "facebook-e2ee", payload.thread_id, parsed)
+
+
+@router.post("/xing", response_model=ImportResult)
+def import_xing(payload: RawXingPayload, db: Session = Depends(get_db)):
+    """Bulk import of a XING data export (messages CSV + network-inquiry CSVs).
+
+    Only the file kinds present in the payload are replaced: conversations
+    live in threads prefixed `xing_`, contact notes in `xing-notiz-`.
+    """
+    result = parse_xing_files(
+        [f.model_dump() for f in payload.files],
+        own_name=settings.own_name,
+    )
+    rows, threads = store_xing(db, result)
+    return ImportResult(rows_inserted=rows, thread_id="xing", threads=threads)
 
 
 def _persist(db: Session, platform: str, thread_id: str, parsed: list[dict]) -> ImportResult:

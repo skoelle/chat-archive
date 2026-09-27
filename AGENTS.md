@@ -33,8 +33,10 @@ chat-archive/
 | `app/auth.py` | API key verification (`X-API-Key` header) |
 | `app/parsers/instagram.py` | Instagram thread JSON parser |
 | `app/parsers/facebook.py` | Facebook thread JSON parser |
+| `app/parsers/xing.py` | XING data export CSV parser (messages + network-inquiry) |
 | `app/parsers/encoding_fix.py` | Mojibake fix (UTF-8 misinterpreted as Latin-1 by Meta) |
-| `app/routers/import_router.py` | `POST /import/instagram` and `/import/facebook` endpoints |
+| `app/xing_store.py` | XING bulk persistence (prefix-scoped replace + contact_mappings) |
+| `app/routers/import_router.py` | `POST /import/instagram`, `/import/facebook` and `/import/xing` endpoints |
 | `app/routers/messages_router.py` | `GET /messages` and `GET /threads` query endpoints |
 
 ### importer/
@@ -50,7 +52,7 @@ chat-archive/
 
 ### `messages`
 - `id` (BigInteger, PK, auto-increment)
-- `platform` (String: `instagram` | `facebook`)
+- `platform` (String: `instagram` | `facebook` | `xing`)
 - `thread_id` (String, indexed)
 - `sender_name` (String, indexed)
 - `timestamp_ms` (BigInteger)
@@ -64,7 +66,7 @@ Maps display names to thread_ids for cross-platform contact resolution.
 - `id` (Integer, PK, auto-increment)
 - `display_name` (String, indexed): real name, e.g. "Mareike Wüste"
 - `thread_id` (String, indexed): thread_id in messages table
-- `platform` (String, nullable): `instagram` | `facebook` | null (any)
+- `platform` (String, nullable): `instagram` | `facebook` | `xing` | null (any)
 
 ## API endpoints
 
@@ -73,6 +75,7 @@ Maps display names to thread_ids for cross-platform contact resolution.
 | POST | `/import/instagram` | X-API-Key | Parse and store Instagram thread |
 | POST | `/import/facebook` | X-API-Key | Parse and store Facebook thread |
 | POST | `/import/facebook-e2ee` | X-API-Key | Parse and store Facebook E2EE thread |
+| POST | `/import/xing` | X-API-Key | Parse and store a whole XING export (all CSVs at once) |
 | GET | `/messages` | X-API-Key | Query messages (default: 1:1 chats) |
 | GET | `/threads` | X-API-Key | List distinct threads (default: 1:1 chats) |
 | GET | `/conversation` | X-API-Key | Merged conversation across platforms |
@@ -96,7 +99,13 @@ MYSQL_PORT=3306
 MYSQL_USER=root
 MYSQL_PASSWORD=secret
 MYSQL_DATABASE=chat_archive
+OWN_NAME=Stefan Kölle
 ```
+
+`OWN_NAME` is your own display name. The XING parser uses it to tell your
+messages from the contact's, so it can create `contact_mappings` pointing at
+the *other* person. When unset, the parser falls back to the most frequent
+sender of the export.
 
 ## Setup & run
 
@@ -143,6 +152,34 @@ npm run tauri build
   broadcast). Facebook import excludes `message_requests/` and `filtered_threads/`.
 - Facebook E2EE: each `.json` file is a standalone thread. Non-thread files
   (settings, metadata) are skipped by checking for a `messages` key.
+- XING: the export contains headerless CSVs (6 columns). A row with filled
+  columns 0–2 (`Betreff`, `timestamp`, `Teilnehmer`) starts a conversation
+  block, every following row (`"", "", "", Absender, timestamp, Inhalt`) is a
+  message of that block. Files are classified by header row:
+  `Name,Erstellt am,Text der Notiz` = notes, `Name,Kontakt bestätigt am` =
+  contact dates, no header = messages. Multi-line contents are quoted, so a
+  real CSV reader is mandatory.
+- XING thread ids: conversations `xing_<slug(betreff)>_<hash8>` (hash over
+  `teilnehmer|betreff|zeitstempel`), notes `xing-notiz-<slug(name)>`. The two
+  prefixes are what makes idempotent, kind-scoped re-imports possible —
+  `startswith(..., autoescape=True)` is required, otherwise `_` acts as a SQL
+  LIKE wildcard and `xing_` would match `xing-notiz-` too.
+- XING participant lists drop deactivated contacts, so a single name in the
+  header still means a 1:1 chat: the parser stores `participant_count = 2`
+  for it (`1 → 2`). Everything else uses the header count (17 group chats).
+- XING import is a bulk replace of all CSVs in one `POST /import/xing`;
+  the API auto-creates `contact_mappings` (display name → thread id) for
+  every resolvable contact, so `/conversation?contact_names=...` finds a
+  thread even when it only contains messages you sent yourself. Threads with
+  an unknown counterpart (122 of 1388) stay unmapped — the export simply
+  does not say who they were sent to.
+- XING exports clean UTF-8, so `encoding_fix.py` must NOT be applied there
+  (a latin1 round trip would corrupt valid text).
+- XING stores some messages as HTML (event invitations, newsletters, forwarded
+  mails — 113 of 3048). The parser converts them to plain text (`strip_html`):
+  tags dropped, `<br>`/`<p>` → line break, entities decoded, link targets
+  appended as `(https://...)`, `<script>`/`<style>` content removed. Verify
+  with `content REGEXP '<(div|a|br|...)'` → must be 0 for `platform='xing'`.
 - `participant_count` is stored per message and used to filter threads:
   `?thread_type=direct` (2 participants), `?thread_type=group` (>2), `?thread_type=all`.
 - `/conversation` searches by `sender_name` AND by `contact_mappings` table.

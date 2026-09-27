@@ -11,7 +11,7 @@ cd api
 python -m venv .venv
 source .venv/bin/activate   # on Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env        # fill in API_TOKEN and MySQL credentials
+cp .env.example .env        # fill in API_TOKEN, MySQL credentials, OWN_NAME
 uvicorn app.main:app --host 0.0.0.0 --port 8420
 ```
 
@@ -32,8 +32,8 @@ docker run -d --name chat-archive-api \
 | Column | Type | Description |
 |---|---|---|
 | `id` | BigInteger, PK | Auto-increment |
-| `platform` | String | `instagram` \| `facebook` |
-| `thread_id` | String, indexed | Folder name from takeout ZIP |
+| `platform` | String | `instagram` \| `facebook` \| `xing` |
+| `thread_id` | String, indexed | Folder name from takeout ZIP, `xing_<...>` / `xing-notiz-<...>` for XING |
 | `sender_name` | String, indexed | Who sent the message |
 | `timestamp_ms` | BigInteger | Unix timestamp in milliseconds |
 | `content` | Text, nullable | Message text (null for photos/videos) |
@@ -50,7 +50,7 @@ Maps display names to thread_ids for cross-platform contact resolution.
 | `id` | Integer, PK | Auto-increment |
 | `display_name` | String, indexed | Real name, e.g. "Jane Doe" |
 | `thread_id` | String, indexed | Thread ID in messages table |
-| `platform` | String, nullable | `instagram` \| `facebook` \| null (any) |
+| `platform` | String, nullable | `instagram` \| `facebook` \| `xing` \| null (any) |
 
 ### Message object
 
@@ -83,8 +83,9 @@ of objects with `actor` (who reacted) and `reaction` (the emoji).
 | POST | /import/instagram | Accepts raw Instagram thread JSON, parses, stores |
 | POST | /import/facebook | Accepts raw Facebook (standard) thread JSON, parses, stores |
 | POST | /import/facebook-e2ee | Accepts raw Facebook E2EE thread JSON, parses, stores |
+| POST | /import/xing | Accepts all CSV files of a XING data export, parses, stores |
 
-All import endpoints accept a JSON body:
+The Meta endpoints (instagram, facebook, facebook-e2ee) accept a JSON body:
 ```json
 {
   "thread_id": "john-doe_123456789",
@@ -95,6 +96,26 @@ All import endpoints accept a JSON body:
 The `thread_id` is derived from the folder name inside the takeout ZIP.
 The importer sends each JSON file found in the extracted ZIP automatically.
 
+#### XING (bulk import)
+
+`POST /import/xing` receives every CSV file of the export in a single request
+and classifies them by header row (`messages` / `notes` / `contacts`):
+
+```json
+{
+  "files": [
+    { "path": "data/messages-backend/files/<hash>.csv", "content": "..." },
+    { "path": "data/network-inquiry/files/<hash>.csv", "content": "..." }
+  ]
+}
+```
+
+Thread ids: conversations `xing_<slug(subject)>_<hash8>`, contact notes
+`xing-notiz-<slug(name)>`. The import replaces the previously stored XING data
+of every file kind present in the payload (kind-scoped, so a payload with only
+the messages CSV leaves the notes untouched) and creates `contact_mappings`
+for every resolvable contact.
+
 #### Import response
 
 ```json
@@ -103,6 +124,9 @@ The importer sends each JSON file found in the extracted ZIP automatically.
   "thread_id": "john-doe_123456789"
 }
 ```
+
+XING additionally returns `threads` (number of threads written, bulk import):
+`{"rows_inserted": 4451, "thread_id": "xing", "threads": 2352}`
 
 ### Query
 
