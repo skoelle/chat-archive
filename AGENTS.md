@@ -151,7 +151,12 @@ npm run tauri build
 - The `encoding_fix.py` module handles Meta's mojibake bug (UTF-8 bytes
   misinterpreted as Latin-1). Apply it to all string values (`sender_name`,
   `content`) of the Instagram/Facebook parsers — never to the CSV exports
-  (XING/LinkedIn, see below).
+  (XING/LinkedIn, see below). It also normalizes the result to NFC: Meta's
+  takeout stores names decomposed (u + combining diaeresis instead of a
+  precomposed ü), and without normalization one contact would split into two
+  entries in `/contacts/top` (fold_name() cannot fold the combining sequence)
+  and be missed by `/conversation` (`utf8mb4_general_ci` does not normalize
+  LIKE either).
 - Instagram and Facebook parsers are structurally identical — Meta uses the same
   JSON format for both takeout exports.
 - Instagram import only processes `messages/inbox/` (excludes message_requests,
